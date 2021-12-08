@@ -1,0 +1,93 @@
+---
+title: "Untitled"
+author: "Demetri Pananos"
+date: "07/12/2021"
+output: pdf_document
+---
+
+
+```{r}
+library(tidyverse)
+theme_set(theme_light())
+```
+
+
+# Learning Stuff About Pharmacokinetics
+
+We find ourselves in a couple of scenarios when talking about estimating pharmacokientic (PK) stuff.  We can have...:
+
+* One or many patients, with
+* One or many observations, from
+* A first dose or at steady state
+
+in any combination.  It might be illustrative to see how we can estimate relevent quantities from PK profile(s) in each of these scenarios.
+
+
+# A Primer on PK Profiles
+
+A first order linear absorption one compartment model from a single bolus dose of size $D$ will yield a concentration profile that looks like
+
+$$ C(t) = \begin{cases} \dfrac{D \times F}{V} \dfrac{k_a}{k_e-k_a} \left( e^{-k_at} - e^{-k_et} \right) & t>0 \\ 0 & \mbox{else} \end{cases}$$
+
+Here, $k_e$ is the elimination rate constant, $k_a$ is the absorption rate constant, and $V$ is the volume od distribution.  This sometimes called a "flip flop" model because parameter triples $(V, k_a, k_e)$ will produce the same curve as parameters $(Vk_e/k_a, k_e, k_a)$.  It is typical to constrain the model so that $0<k_e < k_a$.
+
+Note that for multiple doses, we obtain the PK curve by summing up delayed versions of $C(t)$.  If a patient takes a drug every 12 hours (twice daily for example), then the concentration on the $k^{th}$ day at time $t$ would be
+
+
+$$ C(t) + C(t-12) + C(t-24) + \dots + C(t-12k-12) $$
+
+depending on if the concentration is needed in the first or second half of the day.  This means that when a patient takes a dose and is in steady state, the concentrtion profile would be
+
+$$ C(t) = c_0 +  \dfrac{D \times F}{V} \dfrac{k_a}{k_e-k_a} \left( e^{-k_at} - e^{-k_et} \right) $$
+
+where $c_0$ is the inital concentration at a trough in steady state.  Note $c_0$ can be written in terms of the other PK paramaters (or reasonably well approximated therein by assuming perfect adherence and computing the concentration some time in the distant future).
+
+
+```{r, fig.cap='Example of a multiple dose regiment.  The solid blue lines/dots represent observed concentrations for a repeated dose.  The light blue lines are the concentrtion profile which we would have observed had no dose been given prior to that time.  Summing the light blue curves together yields the solid blue curve.'}
+concentration_profile<-function(time, D=2.5, V=5.0, ka=0.3, ke=0.15){
+  y = D/V * ka/(ke-ka) *(exp(-ka*time) - exp(-ke*time))
+  
+  ix = which(y<0)
+  
+  y[ix] = 0
+  
+  y
+}
+
+dose_times = seq(0, 60, 12)
+times = seq(0, 60, 1.5)
+C = rep(0, length(times))
+for(i in dose_times){
+  C = C + concentration_profile(times-i)
+}
+
+tibble(t = times, y = C) %>% 
+  ggplot(aes(t, C))+
+  geom_point(color = 'blue')+
+  geom_line(color = 'blue')+
+  stat_function(fun=concentration_profile, alpha=0.5, color = 'blue')+
+  stat_function(fun=function(x) concentration_profile(x-12), alpha=0.5, color = 'blue')+
+  stat_function(fun=function(x) concentration_profile(x-24), alpha=0.5, color = 'blue')+
+  stat_function(fun=function(x) concentration_profile(x-36), alpha=0.5, color = 'blue')+
+  stat_function(fun=function(x) concentration_profile(x-48), alpha=0.5, color = 'blue')+
+  theme(aspect.ratio = 1)+
+  labs(x='Time', y='Concentration')
+```
+
+
+# One Patient, Multiple Observations, First Dose
+
+```{r}
+times = seq(0, 24, 1)
+y = concentration_profile(times)
+d = tibble(t = times[times>6], y = y[times>6])
+model = lm(log(y) ~ t, data = d)
+ke_est = round(coef(model)['t'], 2)
+
+d %>% 
+  ggplot(aes(t, y))+
+  geom_point(color = 'blue')+
+  scale_y_log10()+
+  geom_smooth(method = 'lm')+
+  geom_text(aes(x = 10, y = 0.1), label=expression(k[e]), parse=T)
+
