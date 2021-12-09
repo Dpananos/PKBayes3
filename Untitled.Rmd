@@ -6,8 +6,23 @@ output: pdf_document
 ---
 
 
-```{r}
+```{r, include=FALSE, message=FALSE, warning=FALSE}
+
+knitr::opts_chunk$set(
+  echo = F,
+  message = F,
+  warning = F,
+  fig.height = 4,
+  fig.align = 'center',
+  dpi = 400,
+  cache = T
+)
+
+
 library(tidyverse)
+library(rstanarm)
+library(tidybayes)
+library(cmdstanr)
 theme_set(theme_light())
 ```
 
@@ -77,17 +92,166 @@ tibble(t = times, y = C) %>%
 
 # One Patient, Multiple Observations, First Dose
 
+One method of estimating PK parameters in this case is to simply take the log of the concentrations for those observations in the elimination phase and run a linear model
+
+$$ \log(y) = \beta_0 + \beta_1 t $$
+
+The concentration profile is approximately exponential in the trough, and so this implies $ke = \beta_1$.  This can work well with high precision data as shown below.  As we can see however, the model can not accommodate earlier measurements, this means this particular model is not useful if we care to estimate the remaining PK parameters, or quantities like time to max concentration.
+
 ```{r}
-times = seq(0, 24, 1)
+times = c(0.5, 1.0, 2.0, 4.0, 6.0, 8.0, 10.0, 12.0, 15.0, 20.0, 24.0)
 y = concentration_profile(times)
-d = tibble(t = times[times>6], y = y[times>6])
-model = lm(log(y) ~ t, data = d)
-ke_est = round(coef(model)['t'], 2)
+d = tibble(times, y)
+model = stan_glm(log(y) ~ times, data = filter(d, times>=8))
+
+predictions = tibble(times=seq(6, 24)) %>% 
+              add_linpred_draws(model, ndraws = 20)
 
 d %>% 
-  ggplot(aes(t, y))+
-  geom_point(color = 'blue')+
-  scale_y_log10()+
-  geom_smooth(method = 'lm')+
-  geom_text(aes(x = 10, y = 0.1), label=expression(k[e]), parse=T)
+  ggplot(aes(times, y))+
+  geom_line(data=predictions, aes(times, exp(.linpred), group = .draw),color = 'black', alpha = 0.15)+
+    geom_point(aes(times, y), shape=21, color='white', fill='blue')+
+  theme(aspect.ratio = 1)
+
+
+
+```
+
+
+# Multiple Patients, Multiple Measurements, First Dose
+
+If we have multiple subjects *who are all similar in some way*, then we can use hierarchical modeling to estimate the individual elimination rates 
+
+$$ \log(y_{i, j}) = \beta_{0, j} + +\beta_{1, j} t_{i} $$
+
+$$ \left[ \beta_{0, j}, \beta_{1, j} \right] \sim \mbox{Normal}( B, \Sigma_{\beta}) $$
+
+The key here is that the subjects are all similar in some way (statistically, they are exchangable).  You could think of this as them as having the same covariates (same age, weight, etc). If this were false, we would have to include interactions between time and relevant covariates in the linear model so that the elimination rate could be modulated by those covariates. Shown below is a plot of 9 simulated subjects.  I plot their estimated curve in black, and the population curve in sky blue.
+
+```{r}
+nsubject=16
+V = rlnorm(nsubject, log(3.3), 0.1)
+ke = rlnorm(nsubject, log(0.1), 0.25)
+ka = rlnorm(nsubject, log(0.3), 0.25)
+d = tibble(subjectids = factor(1:nsubject), V, ke, ka) %>% 
+    crossing(times) %>% 
+    mutate(y = concentration_profile(times, V=V, ka=ka, ke=ke),
+           tmax = log(ka/ke)/(ka-ke),
+           cmax = concentration_profile(tmax, V=V, ka=ka, ke=ke))
+
+
+fit_data = filter(d, times>=8) %>% 
+           mutate(i = seq_along(subjectids))
+stan_data = compose_data(fit_data)
+stan_code = '
+data{
+  int n;
+  int n_subjectids;
+  int subjectids[n];
+  vector[n] times;
+  vector[n] y;
+  vector[n] tmax;
+}
+transformed data{
+ vector[n] logy = log(y);
+ vector[16] pred_times;
+ for(i in 1:16){
+  pred_times[i] = 8 + i;
+ }
+}
+parameters{
+  vector[2] B;
+  cholesky_factor_corr[2] L_b;
+  vector<lower=0>[2] sigma_b;
+  real<lower=0> sigma;
+  matrix[2, n_subjectids] z_b;
+}
+transformed parameters{
+  
+  matrix[2, n_subjectids] b = diag_pre_multiply(sigma_b, L_b) * z_b;
+  vector[n] linpreds;
+  
+  for(i in 1:n){
+    linpreds[i] = B[1] + b[1, subjectids[i]] + (B[2] + b[2, subjectids[i]])*times[i];
+  }
+  
+}
+model{
+  B ~ std_normal();
+  L_b ~ lkj_corr_cholesky(2);
+  sigma_b ~ cauchy(0, 1);
+  sigma ~ cauchy(0, 1);
+  to_vector(z_b) ~ std_normal();
+  logy ~ normal(linpreds, sigma);
+}
+generated quantities{
+  real z[2] = normal_rng(rep_vector(0.0, 2), 1);
+  vector[2] bb = diag_pre_multiply(sigma_b, L_b) * to_vector(z);
+  vector[n] cmax_pred;
+  vector[16] preds;
+  
+  for(i in 1:n){
+    cmax_pred[i] =  B[1] + b[1, subjectids[i]] + (B[2] + b[2, subjectids[i]])*tmax[i];
+  }
+  for(i in 1:16){
+    preds[i] = B[1] + bb[1] + (B[2] + bb[2])*pred_times[i];
+  }
+}
+
+'
+tmp_model = write_stan_file(stan_code)
+stan_model = cmdstan_model(tmp_model)
+fit = stan_model$sample(stan_data, parallel_chains=4, chains=4, adapt_delta = 0.99)
+
+individ_preds = fit %>%  
+  recover_types(times) %>% 
+  spread_draws(linpreds[i], ndraws = 10) %>%
+  inner_join(fit_data)
+
+global_preds = fit %>% 
+  spread_draws(preds[i], ndraws = 100)
+
+global_preds = tibble(times=seq(8, 24)) %>% 
+               mutate(i = seq_along(times)) %>% 
+               inner_join(global_preds)
+
+
+  ggplot()+
+  geom_line(data = global_preds, aes(times, exp(preds), group = .draw), color = 'sky blue', alpha = 0.15)+  
+  geom_line(data = individ_preds, aes(times, exp(linpreds), group = .draw), color = 'black', alpha = 0.15)+
+  geom_point(data=d, aes(times, y), fill='blue', color='white', shape=21)+
+  facet_wrap(~subjectids)+
+  theme(aspect.ratio = 1/1.61)+
+  labs(x='Time', y='Concentration')+
+  ylim(NA, max(d$y))
+```
+
+# What's Wrong With These Models?
+
+Nothing...yet.  They are well suited for the scenario in which they are applied: high quality data obtained from a homogeneous population with the intent of estimating a single PK parameter which is reasonably approximated by a linear model on the log scale.
+
+However, it is not hard to show where these models can fail.  For example, suppose that we did not have a homogeneous sample and we needed to estimate the max concentration.  Under our present capabilities, we would perhaps fit
+
+$$ \log(y) = X\beta + Z\gamma $$
+
+Where here $X\beta$ are any fixed effects and $Z\gamma$ are random effects (which may include effects on time).  As we have seen, we can estimate the elimination rate quite easily, but this form of the conditional mean *does not have a max concentration*.  What has been done in practice [markus paper] is to estimate the max concentration using a point estimate for the time to max concentration.  Not only does this ignore uncertainty in the the time to max concentration (which can potentially differ subject to subject), it also results in an upward bias to the point where even noiseless data with the correct time to max concentration can not return a credible interval spanning the true max concentration (see below). This bias is provable in many ways, which I omit for now.
+
+Additionally, if we were to adjust for covariates, the reason for an increase/decrease in the concentration is underdetermined.
+
+
+```{r}
+  
+fit %>% 
+  spread_draws(cmax_pred[i]) %>% 
+  mutate(cmax_pred = exp(cmax_pred)) %>% 
+  mean_qi %>% 
+  inner_join(fit_data) %>% 
+  distinct(subjectids, .keep_all = T) %>% 
+  ggplot(aes(cmax, cmax_pred, ymin = .lower, ymax=.upper))+
+  geom_pointrange(color='blue')+
+  geom_abline()+
+  theme(aspect.ratio = 1)+
+  geom_text(aes(0.45, 0.43), label = 'Line of Equality', angle = 40)+
+  labs(x='True Max Concentratin', y= 'Estimated Max Concentration')
+```
 
