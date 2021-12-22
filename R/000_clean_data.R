@@ -1,12 +1,17 @@
 library(tidyverse)
 library(readxl)
 library(janitor)
-
+library(duckdb)
+library(DBI)
 
 raw_data = read_xlsx('data/ute_full_raw_data.xlsx') %>% 
-           clean_names()
+                clean_names()
 
 
+
+con = dbConnect(duckdb(), dbdir='data/database/apixaban_data.duckdb')
+
+dbWriteTable(con, 'raw_data', raw_data, overwrite=T)
 
 clean_1 = raw_data %>% 
   rename(age = age_at_enrollment,
@@ -28,9 +33,8 @@ clean_1 = raw_data %>%
     contains('mg_day')
   )
 
-
 colnames(clean_1) = str_replace(colnames(clean_1), 'hx', 'history')
 
-clean_1 %>% 
-  mutate_at(vars(contains('history')), ~as.numeric(.=='Yes')) %>% 
-  write_csv('data/cleaned_data.csv')
+dbWriteTable(con, 'cleaned_data',clean_1, overwrite=T)
+
+dbDisconnect(con)

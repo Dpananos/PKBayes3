@@ -717,95 +717,22 @@ generated quantities{
 }
 ```
 
-```{r}
-concentration = function(ts, D, f, V, ka, ke){
-  D*f*ka/(V*(ke-ka)) * (exp(-ka*ts) - exp(-ke*ts))
-}
-
-c0 = function(D, f, V, ka, ke){
-  ic = 0
-  for( i in 1:5){
-    ic = ic + concentration(12*i, D, f, V, ka, ke)
-  }
-  ic
-}
-N = 1000
-tibble(
-  V = rnorm(N, log(5), 0.5) %>% exp,
-  ke = rnorm(N,-1.25, .25) %>% exp,
-  tmax = rnorm(N,3.5, 0.25),
-  a = rbeta(N, 10, 40),
-  ka = -log(a)/(tmax*(1-a)),
-  f = plogis(rnorm(N, 0, 0.125)),
-  .draw = 1:N
-) %>% 
-  crossing(ts = seq(0, 12, 0.25)) %>% 
-  mutate(y = concentration(ts, 2.5, f, V, ka, ke) + c0(2.5, f, V, ka, ke)) %>% 
-  ggplot(aes(ts, y, group=.draw))+
-  geom_line(alpha = 0.5)+
-  geom_point(data=filter(d, dose_mg_twice_daily==2.5), aes(hrs_post_dose, yobs_ng_ml/1000), inherit.aes = F, color = 'red')
-  
-```
 
 
 ```{r}
 stan_data = compose_data(d)
 
-fit = model_006_constant_ke$sample(stan_data, chains=4, parallel_chains=4)
+fit = model_005_tmax_priors$sample(stan_data, chains=4, parallel_chains=4)
 fit$cmdstan_diagnose()
 
-y = d$yobs_ng_ml
-ypred = fit$draws('yppc') %>% 
-        as_draws_matrix() %>% 
-        apply(., 2, mean)
+ypred = extract_prediction(fit, 'yppc')
+ytrue = d$yobs_ng_ml
 
-apparent_performance = MLmetrics::MSE(log(y), log(ypred))
-
+plot(log(ypred), log(ytrue) - log(ypred))
 ```
 
 
 
 
-# Model Validation
-
-
-```{r}
-model_005_tmax_priors = cmdstan_model('models/model_005_tmax_priors.stan')
-bootstrapped_optimism = replicate(20, {
-  resampled_d = sample_n(d, nrow(d),  replace=T)
-  test_d = d
-  colnames(test_d) = str_c('test', colnames(test_d), sep = '_')
-  stan_data = compose_data(bind_cols(resampled_d, test_d))
-  fit = model_005_tmax_priors$sample(stan_data, chains=4, parallel_chains=4)
-  
-  # Test performance
-  ypred = fit$draws('test_yppc') %>% 
-    as_draws_matrix() %>% 
-    apply(., 2, mean)
-  
-  ytest = test_d$test_yobs_ng_ml
-  
-  test_performance = MLmetrics::MSE(log(ypred), log(ytest))
-  
-  # Bootstrap performance
-  ypred = fit$draws('yppc') %>% 
-  as_draws_matrix() %>% 
-  apply(., 2, mean)
-  y = resampled_d$yobs_ng_ml
-  
-  bootstrap_performance = MLmetrics:: MSE(log(ypred), log(y))
-  
-  optimism = bootstrap_performance - test_performance
-  
-})
-
-apparent_performance - mean(bootstrapped_optimism)
-```
-
-
-```{r}
-fit$draws() %>% 
-  spread_draws(V[i], test_V[i], ndraws = 100)
-```
 
 

@@ -3,13 +3,16 @@ library(tidybayes)
 library(cmdstanr)
 library(rms)
 library(posterior)
+library(DBI)
+library(duckdb())
 source('R/utils.R')
 
 theme_set(theme_light())
 
-d = read_csv('data/cleaned_data.csv')  %>% 
-    select(-history_heart_failure)
-
+con = dbConnect(duckdb(), 'data/database/apixaban_data.duckdb')
+d = tbl(con, "cleaned_Data") %>% 
+    collect()
+dbDisconnect(con)
 
 dd = datadist(d)
 options(datadist='dd')

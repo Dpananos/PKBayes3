@@ -24,3 +24,26 @@ extract_prediction<-function(fit, var_name){
     apply(., 2, mean)
   
 }
+
+
+concentration = function(ts,C0, D, f, V, ka, ke){
+  C0 + D*f*ka/(V*(ke-ka)) * (exp(-ka*ts) - exp(-ke*ts))
+}
+
+
+prepare_stan_data<-function(V.formula, ke.formula, F.formula, a.formula, data){
+  stan_data = tidybayes::compose_data(d)
+  stan_data$X_V = model.matrix(V.formula, data = data)
+  stan_data$p_V = ncol(stan_data$X_V)
+  
+  stan_data$X_ke = model.matrix(ke.formula, data = data)
+  stan_data$p_ke = ncol(stan_data$X_ke)
+  
+  stan_data$X_F = model.matrix(F.formula, data = data)
+  stan_data$p_F = ncol(stan_data$X_F)
+  
+  stan_data$X_a = model.matrix(a.formula, data = data)
+  stan_data$p_a = ncol(stan_data$X_a)
+  
+  return(stan_data)
+}
