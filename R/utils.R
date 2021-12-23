@@ -31,18 +31,19 @@ concentration = function(ts,C0, D, f, V, ka, ke){
 }
 
 
-prepare_stan_data<-function(V.formula, ke.formula, F.formula, a.formula, data){
-  stan_data = tidybayes::compose_data(d)
-  stan_data$X_V = model.matrix(V.formula, data = data)
-  stan_data$p_V = ncol(stan_data$X_V)
+
+design_matrices = function(v.formula, ke.formula, f.formula, a.formula, data){
+  stan_data = compose_data(data)
+  stan_data$X_v = model.matrix(v.formula, data=d)
+  stan_data$p_v = ncol(stan_data$X_v)
   
-  stan_data$X_ke = model.matrix(ke.formula, data = data)
+  stan_data$X_ke = model.matrix(ke.formula, data=d)
   stan_data$p_ke = ncol(stan_data$X_ke)
   
-  stan_data$X_F = model.matrix(F.formula, data = data)
+  stan_data$X_F = model.matrix(f.formula, data=d)
   stan_data$p_F = ncol(stan_data$X_F)
   
-  stan_data$X_a = model.matrix(a.formula, data = data)
+  stan_data$X_a = model.matrix(a.formula, data=d)
   stan_data$p_a = ncol(stan_data$X_a)
   
   return(stan_data)
