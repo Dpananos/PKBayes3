@@ -1,0 +1,99 @@
+---
+title: "Paper 3"
+author:
+  - name: "A. Demetri Pananos"
+    affiliation: Department of Epidemiology and Biostatistics
+  - name: "Daniel J. Lizotte"
+    affiliation: Department of Epidemiology and Biostatistics, Department of Computer Science
+output: distill::distill_article
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: pdf_document
+bibliography: references.bib  
+---
+
+
+```{r global-options, include=FALSE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(
+  echo = F,
+  message = F,
+  warning = F,
+  fig.height = 4,
+  fig.align = 'center',
+  dpi = 400,
+  cache = T
+)
+```
+
+```{r libraries}
+library(tidyverse)
+library(rstanarm)
+library(tidybayes)
+library(cmdstanr)
+library(rms)
+library(posterior)
+library(rsample)
+library(duckdb)
+library(DBI)
+source('R/utils.R')
+
+theme_set(theme_light())
+cmdstanr::register_knitr_engine(override = F)
+```
+
+```{r load-data}
+con = dbConnect(duckdb(),'data/database/apixaban_data.duckdb')
+d = tbl(con, 'scaled_cleaned_data') %>% 
+    collect()
+
+dbDisconnect(con)
+```
+
+# Introduction
+
+Apixaban is a direct acting oral anti-coagulant often prescribed for prevention of venous thromboembolic events and prevention of stroke and systemic embolism in patients with atrial fibrillation (AF) [-@BMSmonograph; -@byon2019apixaban].  Studies as recent as 2019 have reported excess variability in observed apixaban plasma concentrations in patients with AF [-@sukumar2019apixaban]. Since apixaban plasma concentrations correlate closely with anti-coagulation[-@upreti2013effect, -@frost2013safety, -@frost2013apixaban], excess variability in these concentrations may mean excess risk of bleeding. These findings raise questions towards the optimal dosing of apixaban in older adults with AF encountered outside of clinical trials.
+
+These findings have also spurred additional research into determining factors which explain this excess variability beyond known clinical factors [-@gulilat2020drug].  Models presented in this research consider the effect of covariates, as well as time, to be linear on the log scale.  While log-linear models are simple to interpret and widely available in a variety of statistical software, they can result in biased estimates of relevant pharmacokinetic parameters important to personalization, especially when substantive information on the conditional mean is available.
+
+
+
+```{r}
+dd = datadist(d)
+options(datadist='dd')
+
+markus_model = ols(log(yobs_ng_ml) ~ dose_mg_twice_daily + hrs_post_dose + is_male + age + weight_kg + creatinine_micromol_l + amiodarone_mg_day + diltiazem_mg_day, data = d, x=T, y=T)
+
+extended_model = ols(log(yobs_ng_ml) ~ dose_mg_twice_daily + hrs_post_dose*(is_male + age + weight_kg + creatinine_micromol_l) + amiodarone_mg_day + diltiazem_mg_day, data = d, x=T, y=T)
+
+
+validate(markus_model, B = 1000)
+validate(extended_model, B = 1000)
+
+a = exp(predict(markus_model))
+b = exp(predict(extended_model))
+```
+
+
+# Bayesian Models
+
+```{r}
+stan_data = design_matrices(
+  v.formula=~(age + weight_kg)*is_male, 
+  ke.formula=~(weight_kg + creatinine_micromol_l )*is_male, 
+  f.formula = ~amiodarone_mg_day + diltiazem_mg_day, 
+  a.formula = ~is_male, 
+  d)
+
+model = cmdstan_model('models/005_double_exp_beta_prior.stan')
+  
+fit = model$sample(stan_data, parallel_chains=4)
+
+ypred = extract_prediction(fit, 'yppc')
+ytrue = d$yobs_ng_ml
+
+MLmetrics::MSE(log(ypred), log(ytrue))
+MLmetrics::R2_Score(log(ypred), log(ytrue))
+
+
+plot(log(ypred), log(ytrue))
+abline(0, 1, add=T)
+```
