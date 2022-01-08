@@ -67,24 +67,17 @@ In this paper, we create a population PK model for apixaban concentrations using
 
 Something something something.  Obs needs work.
 
-
-
-
-```{r}
-dd = datadist(d)
-options(datadist='dd')
-
-markus_model = ols(log(yobs_ng_ml) ~ dose_mg_twice_daily + hrs_post_dose + is_male + age + weight_kg + creatinine_micromol_l + amiodarone_mg_day + diltiazem_mg_day, data = d, x=T, y=T)
-
-extended_model = ols(log(yobs_ng_ml) ~ dose_mg_twice_daily + hrs_post_dose*(is_male + age + weight_kg + creatinine_micromol_l) + amiodarone_mg_day + diltiazem_mg_day, data = d, x=T, y=T)
-
-
-validate(markus_model, B = 1000)
-validate(extended_model, B = 1000)
-
-a = exp(predict(markus_model))
-b = exp(predict(extended_model))
-```
+* Methods
+  * Quick recap of Bayesian models, why MCMC is a good idea and not map, decision theory?
+  * Bayesian model structure
+  
+* Results
+  * Model fit, model posterior predictions
+  * Comparison with model from Markus paper
+  * Predictive comparison, need to run a big bootstrap on this.
+  
+* Limitations
+* Discussion
 
 
 # Bayesian Models
@@ -100,6 +93,7 @@ stan_data = design_matrices(
 model = cmdstan_model('models/005_double_exp_beta_prior.stan')
   
 fit = model$sample(stan_data, parallel_chains=4)
+fit$save_object(file = "005_double_exp_beta_prior.RDS")
 
 ypred = extract_prediction(fit, 'yppc')
 ytrue = d$yobs_ng_ml

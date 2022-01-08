@@ -10,7 +10,7 @@ con = dbConnect(duckdb(), dbdir='data/database/apixaban_data.duckdb')
 raw_data = read_xlsx('data/ute_full_raw_data.xlsx') %>% 
                 clean_names()
 
-
+rommel_data = read_csv("data/rommel_data.csv")
 
 
 # Write a cleaned version of the data, with some renamed variables
@@ -49,10 +49,37 @@ clean_2 = clean_1 %>%
   select(-history_heart_failure, -ketoconazole_mg_day, -fluconazole_mg_day)
   
 
+# Clean rommel's data to match ute's
+
+rommel_clean = rommel_data %>% 
+  mutate(dose_mg_twice_daily = 2.5,
+         Sex = str_to_lower(Sex),
+         Subject = as.numeric(as.factor(Subject))) %>% 
+  rename(
+    hrs_post_dose = Time,
+    subjectids = Subject,
+    yobs_ng_ml = Concentration,
+    age = Age,
+    weight_kg = Weight,
+    creatinine_micromol_l = Creatinine,
+    sex = Sex
+  ) %>% 
+  select(
+    subjectids,
+    dose_mg_twice_daily,
+    hrs_post_dose, 
+    yobs_ng_ml,
+    age,
+    weight_kg, 
+    creatinine_micromol_l,
+    sex
+  )
 
 
-dbWriteTable(con, 'raw_data', raw_data, overwrite=F)
-dbWriteTable(con, 'cleaned_data',clean_1, overwrite=F)
-dbWriteTable(con, 'scaled_cleaned_data',clean_2, overwrite=F)
+dbWriteTable(con, 'ute_raw_data', raw_data, overwrite=T)
+dbWriteTable(con, 'ute_cleaned_data',clean_1, overwrite=T)
+dbWriteTable(con, 'ute_scaled_cleaned_data',clean_2, overwrite=T)
+dbWriteTable(con, 'rommel_cleaned_data',rommel_clean, overwrite=T)
+dbWriteTable(con, 'rommel_raw',rommel_data, overwrite=T)
 
 dbDisconnect(con)
