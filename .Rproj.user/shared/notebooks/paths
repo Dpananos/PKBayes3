@@ -1,6 +1,7 @@
 /Users/demetri/gitrepos/PKBayes2py/data/rommels_apixiban_data.csv="D4375355"
 /Users/demetri/gitrepos/PKBayes2py/experiment_models/condition_on_patients.stan="2D898F33"
 /Users/demetri/gitrepos/PKBayes2py/experiment_models/original_model.stan="71930E0E"
+/Users/demetri/gitrepos/PKBayes3/.gitignore="DD64F91C"
 /Users/demetri/gitrepos/PKBayes3/R/000_clean_data.R="9753CC5A"
 /Users/demetri/gitrepos/PKBayes3/R/001_validate_models.R="3E009E7A"
 /Users/demetri/gitrepos/PKBayes3/R/utils.R="85839B61"
@@ -12,3 +13,4 @@
 /Users/demetri/gitrepos/PKBayes3/models/004_tmax_priors.stan="75AC72E8"
 /Users/demetri/gitrepos/PKBayes3/models/005_double_exp_beta_prior.stan="407AD0CF"
 /Users/demetri/gitrepos/PKBayes3/models/008_combined_data_model.stan="FA66745A"
+/Users/demetri/gitrepos/PKBayes3/references.bib="FE146888"

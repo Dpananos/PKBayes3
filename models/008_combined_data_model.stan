@@ -63,7 +63,8 @@ parameters{
   real<lower=0, upper=1> kappa;
   vector<lower=0, upper=1>[r_n_subjectids] delays;
   
-  real<lower=0> sigma;
+  real<lower=0> r_sigma;
+  real<lower=0> u_sigma;
   
   real mu_alpha;
   real<lower=0> s_alpha;
@@ -134,11 +135,12 @@ model{
   beta_dil ~ double_exponential(0, tau_F);
   tau_F ~ normal(0, 0.25);
   
-  sigma ~ lognormal(log(0.1), 0.2);
-  r_yobs_scaled ~ lognormal(log(r_C), sigma);
-  u_yobs_scaled ~ lognormal(log(u_C), sigma);
+  r_sigma ~ lognormal(log(0.1), 0.2);
+  u_sigma ~ lognormal(log(0.1), 0.2);
+  r_yobs_scaled ~ lognormal(log(r_C), r_sigma);
+  u_yobs_scaled ~ lognormal(log(u_C), u_sigma);
 }
 generated quantities{
-  real r_yppc[r_n] = lognormal_rng(log(r_C), sigma);
-  real u_yppc[u_n] = lognormal_rng(log(u_C), sigma);
+  real r_yppc[r_n] = lognormal_rng(log(r_C), r_sigma);
+  real u_yppc[u_n] = lognormal_rng(log(u_C), u_sigma);
 }

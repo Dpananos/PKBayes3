@@ -86,38 +86,38 @@ u_data = list(
 model_data = c(r_data, u_data)
 
 # Load model  
-model = cmdstan_model('models/008_combined_data_model.stan')
-fit = model$sample(model_data, chains=4, seed=0, parallel_chains=4)
+if(T){
+  model = cmdstan_model('models/008_combined_data_model.stan')
+  fit = model$sample(model_data, chains=12, seed=0, parallel_chains=4, thin=3)
+  
+  fit$save_object(file='model_008.RDS')
+  
+}
 
-fit$save_object(file='model_008.RDS')
 
 
 fit %>% 
-  spread_draws(u_C[i]) %>% 
+  spread_draws(r_Cl[i]) %>% 
   mean_qi %>% 
-  bind_cols(ute_data) %>% 
-  ggplot(aes(yobs_ng_ml, 1000*u_C, ymin = .lower*1000, ymax = .upper*1000))+
-  geom_pointrange()+
-  geom_abline()
-
+  bind_cols(distinct(rommel_data, subjectids, .keep_all = T)) %>% 
+  ggplot(aes(weight_kg, r_Cl))+
+  geom_point()
 
 ypred = extract_prediction(fit, 'u_C')*1000
 ytrue = u_data$u_yobs
-plot(log(ypred), log(ypred/ytrue))
+plot(log(ypred), log(ytrue))
 abline(0, 1)
-MLmetrics::R2_Score(log(ypred), log(ytrue))
+MLmetrics::RMSE(log(ypred), log(ytrue))
 
 
 fit %>% 
-  spread_draws(r_C[i]) %>% 
+  spread_draws(r_yppc[i]) %>% 
   mean_qi %>% 
   bind_cols(rommel_data) %>% 
-  ggplot(aes(hrs_post_dose, 1000*r_C, ymin = .lower*1000, ymax = .upper*1000))+
+  ggplot(aes(hrs_post_dose, 1000*r_yppc, ymin = .lower*1000, ymax = .upper*1000))+
   geom_line()+
   geom_point(data=rommel_data, aes(hrs_post_dose, yobs_ng_ml), inherit.aes = F)+
   geom_ribbon(alpha=0.5)+
   facet_wrap(~subjectids)
 
-
-bayesplot::mcmc_hist(fit$draws(), regex_pars = 'beta_amio')
 

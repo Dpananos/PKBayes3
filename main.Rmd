@@ -1,13 +1,10 @@
 ---
 title: "Paper 3"
 author:
-  - name: "A. Demetri Pananos"
-    affiliation: Department of Epidemiology and Biostatistics
-  - name: "Daniel J. Lizotte"
-    affiliation: Department of Epidemiology and Biostatistics, Department of Computer Science
-output: distill::distill_article
-date: "`r format(Sys.time(), '%B %d, %Y')`"
+  - "A. Demetri Pananos"
+  - "Daniel J. Lizotte"
 output: pdf_document
+date: "`r format(Sys.time(), '%B %d, %Y')`"
 bibliography: references.bib  
 ---
 
@@ -42,7 +39,7 @@ cmdstanr::register_knitr_engine(override = F)
 
 ```{r load-data}
 con = dbConnect(duckdb(),'data/database/apixaban_data.duckdb')
-d = tbl(con, 'scaled_cleaned_data') %>% 
+d = tbl(con, 'ute_scaled_cleaned_data') %>% 
     collect()
 
 dbDisconnect(con)
@@ -50,58 +47,23 @@ dbDisconnect(con)
 
 # Introduction
 
-Apixaban is a direct acting oral anti-coagulant often prescribed for prevention of stroke and systemic embolism in patients with atrial fibrillation (AF) [-@BMSmonograph; -@byon2019apixaban].  Studies as recent as 2019 have reported excess variability in observed apixaban plasma concentrations in patients with AF [-@sukumar2019apixaban]. Since apixaban plasma concentrations correlate closely with anti-coagulation[-@upreti2013effect, -@frost2013safety, -@frost2013apixaban], excess variability in these concentrations may mean increased risk of bleeding. These findings raise questions towards the optimal dosing of apixaban in older adults with AF encountered outside of clinical trials.
+Apixaban is a direct acting oral anti-coagulant often prescribed for prevention of stroke and systemic embolism in patients with atrial fibrillation (AF) [-@BMSmonograph; -@byon2019apixaban].  Studies as recent as 2019 have reported excess variability in observed apixaban plasma concentrations in patients with AF [-@sukumar2019apixaban]. Since apixaban plasma concentrations correlate closely with anti-coagulation[-@upreti2013effect,-@frost2013safety,-@frost2013apixaban], excess variability in these concentrations may mean increased risk of bleeding. These findings raise questions towards the optimal dosing of apixaban in older adults with AF encountered outside of clinical trials.
 
-These findings have also spurred additional research into determining factors which explain this excess variability beyond known clinical factors [-@gulilat2020drug].  Models presented in this research consider the effect of covariates $(\mathbf{X})$, as well as time $(t)$, to be linear on the log concentration $(\log(y))$ scale.  The models are then
+These findings have also spurred additional research into determining factors which explain this excess variability beyond known clinical factors [-@gulilat2020drug].  Models presented in this research consider the effect of covariates $(\mathbf{x})$, as well as time $(t)$, to be linear on the log concentration $(\log(y))$ scale.  The models are then
 
-$$ \log(y) = \beta_t \times t + X \beta + \varepsilon\. $$
+$$ \log(y) = \beta_t  t + \mathbf{x} \beta + \varepsilon\>. $$
 \noindent Here $\varepsilon$ is observational noise on the log scale with mean 0 and finite variance $\sigma^2$.
 
-While log-linear models are simple to interpret and widely available in a variety of statistical software, they also have several limitations when applied to pharmacokinetics. First, because the model assumes log concentration is linear in time, this creates an upward bias when estimating max concentration.  This bias persists even when the time to max concentration is known with perfect precision.  Secondly, the parameter $\beta_t$ is estimated to be the elimination rate when the underlying elimination dynamics are approximately exponential (as would be in a first order elimination kinetics model).  This has the consequence of giving every patient -- regardless of clinical factors -- the same elimination rate, despite evidence that elimination rate is modulated by clinical factors such as renal function **[CITATION NEEDED]**.  This can be rectified by including interactions between time and relevant clinical factors in the log-linear model, but the interaction terms may lack precision and hence statistical power.  Lastly, the interpretation of the coefficients $\beta$ is difficult from a mechanistic perspective.  For instance, the model may estimate that use of concomitant amiodarone is associated with an increase in apixaban plasma concentrations[-@gulilat2020drug] but it is unclear if that is because  concomitant amiodarone increases bioavailibility, or because  concomitant amiodarone decreases the elimination rate, or for some other reason.  Many of these problems can be ameliorated, if not completely avoided, by using population pharmacokientic models rather than log-linear models.
+Log-linear models can be useful when the pharmacokinetics in the elimination phase are approximately exponential (as would be the case in a first order elimination compartmental model).  However, their usefulness in estimating effects of various factors on plasma concentrations for use in downstream decision making for dose size is questionable under three important limitations:
 
-The benefits of population pharmacokinetic models is not a only theory driven functional form for the conditional mean, but also the ability to specify which factors effect which aspects of the pharmacokinetics. Many pharmacokinetic studies have been performed on a variety of AF populations **[CITATION NEEDED]**, providing ample prior information on not only which clinical factors may effect the pharmacokinetics of apixaban, but also the magnitude of these effects.  Incorporating information from previous studies into population pharmacokinetic models vis a vis a Bayesian analysis can allow for a richer set of models to be fit by using the prior information as a form of regularization.
+1) Log-linear models as presented in [@gulilat2020drug] a single parameter for the effect of time on log plasma concentrations.  The consequence is that all patients -- regardless of clinical factors -- are given the same elimination rate despite it being known that elimination of apixaban is modulated by clinical factors, such as renal function **CITATION**.  Elimination partly determines trough concentrations, and use of log-linear models to make decusions which are functions of trough concentration (e.g. prescribe a dose so that there is some acceptable risk of exceeding some trough concentration threshold) can be effected.  This problem can be avoided by allowing interactions between time and known modulators of elimination rate, but estimates may suffer from low precision.
 
-Software such as NONMEM **[CITATION NEEDED]** implement both frequentist and Bayesian estimation methods for population PK models, but come at a financial cost and limit who can fit these models.  There is thus a need for a) population PK models for apixaban which, b) can incorporate prior information, and are c) open source and freely available with a large community to support new investigators using these models.
-
-In this paper, we create a population PK model for apixaban concentrations using data from `r nrow(d)` patients seen by a personalized medicine clinic at Western University.  The model incorporates prior information about apixaban pharmacokinetics as reported in @byon2019apixaban and is written in an open source Bayesian language.  Our model incorporates existing knowledge on known clincial factors which effect the pharmacokeintics of apixaban and also can be used for exploratory purposes through the use of regulairzing double exponential priros on the effect of new factors.  We outline the model structure in section 2 and compare predictive performance between a previously published model.
-
-Something something something.  Obs needs work.
-
-* Methods
-  * Quick recap of Bayesian models, why MCMC is a good idea and not map, decision theory?
-  * Bayesian model structure
-  
-* Results
-  * Model fit, model posterior predictions
-  * Comparison with model from Markus paper
-  * Predictive comparison, need to run a big bootstrap on this.
-  
-* Limitations
-* Discussion
+2) Due to the linear effect of time, estimates of max concentration suffer from an upward bias.  This bias persists even when time to max concentration is known exactly (which is never the case).  This bias can be small when time to max concentration is large, but can be large when time to max concentration is small.  If decisions on dose are to be made as a function of max concentration (e.g. prescribe a dose so that there is some acceptable risk of exceeding some concentration threshold), use log-linear models can effect decision quality in an appreciable way.
 
 
-# Bayesian Models
-
-```{r}
-stan_data = design_matrices(
-  v.formula=~(age + weight_kg)*is_male, 
-  ke.formula=~(weight_kg + creatinine_micromol_l )*is_male, 
-  f.formula = ~amiodarone_mg_day + diltiazem_mg_day, 
-  a.formula = ~is_male, 
-  d)
-
-model = cmdstan_model('models/005_double_exp_beta_prior.stan')
-  
-fit = model$sample(stan_data, parallel_chains=4)
-fit$save_object(file = "005_double_exp_beta_prior.RDS")
-
-ypred = extract_prediction(fit, 'yppc')
-ytrue = d$yobs_ng_ml
-
-MLmetrics::MSE(log(ypred), log(ytrue))
-MLmetrics::R2_Score(log(ypred), log(ytrue))
+3) The interpretation of the coefficients for covariates aside from time, $\beta$, represent the change in expected log concentration due to a unit change in the associated covariate.  However, where this change manifests in the pharmacokinetics is is underdetermined.  For example, [@gulilat2020drug] identified concomitant amiodarone is associated with an increase in log-concentrations.  Could this be because an increase in bio availability, or a decrease in clearance, or some other reason?
 
 
-plot(log(ypred), log(ytrue))
-abline(0, 1, add=T)
-```
+All of these limitations can be ameliorated, if not completely avoided, by modelling the pharmacokientics directly using population pharmacokientic (popPK) models.  PopPK models allow users to specify which covariates effect which aspects of the pharmacokientcs directly, resolving issues 1 and 3.  Additionally, modelling the time evolution of the concentration using a compartmental model may reduce bias in estimation of max concentration, resolving issue 2.  However, fitting popPK models usually requires access to proporiety software such as NONMEM **CITATION** or monplix **CITATION**, which can be prohibitive.
+
+This paper presents a Bayesian popPK model written in an open source Bayesian language.  We choose an open source language to make results widely available to investigators, and we choose a Bayesian approach to demonstrate how these models can be used in decision making processes regarding dose.  Our model is fit using 401 observations of apixaban concentrations collected from patients in London, Ontario seeing a personalized medicine clinic.  We supplement these data with data from a highly controlled experiment on pharmacokinetics
