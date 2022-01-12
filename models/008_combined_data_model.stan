@@ -111,18 +111,18 @@ model{
   //See Byon et. al 2019
   mu_tmax ~ normal(log(3.3), 0.1);
   s_t ~ gamma(5, 100);
-  z_t ~ normal(0,1);
+  z_t ~ std_normal();
   
   mu_cl ~ normal(log(3.3),0.15);
   s_cl ~ gamma(15,100);
-  z_cl ~ normal(0,1);
+  z_cl ~ std_normal();
   
   
   mu_alpha ~ normal(-0.25,0.5);
   s_alpha ~ gamma(10, 100);
   z_alpha ~ normal(0,1);
   
-  mu_F ~ normal(0, 0.125);
+  mu_F ~ normal(0, 0.025);
 
   phi ~ beta(20,20);
   kappa ~ beta(20,20);
@@ -143,4 +143,5 @@ model{
 generated quantities{
   real r_yppc[r_n] = lognormal_rng(log(r_C), r_sigma);
   real u_yppc[u_n] = lognormal_rng(log(u_C), u_sigma);
+  vector[r_n + u_n] catconc = append_array(r_C, u_C);
 }
