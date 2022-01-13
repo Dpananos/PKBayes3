@@ -47,6 +47,7 @@ transformed data{
   
   vector[u_n] u_amiodarone_scaled = u_amiodarone/max(u_amiodarone);
   vector[u_n] u_diltiazem_scaled = u_diltiazem/max(u_diltiazem);
+  vector[24] tpred;
 
 }
 parameters{
@@ -76,7 +77,7 @@ parameters{
   vector[4] beta_t;
   vector[4] beta_a;
   real beta_amio;
-  real beta_dil;
+  // real beta_dil;
   real<lower=0> tau_F;
 }
 transformed parameters{
@@ -97,7 +98,7 @@ transformed parameters{
   vector<lower=0, upper=1>[u_n] u_alpha = inv_logit(mu_alpha + u_X*beta_a);
   vector<lower=0>[u_n] u_ka = log(u_alpha)./(u_tmax .* (u_alpha-1));
   vector<lower=0>[u_n] u_ke = u_alpha .* log(u_alpha)./(u_tmax .* (u_alpha-1));
-  vector<lower=0, upper=1>[u_n] u_F = inv_logit(mu_F + beta_dil*u_diltiazem_scaled + beta_amio*u_amiodarone_scaled);
+  vector<lower=0, upper=1>[u_n] u_F = inv_logit(mu_F + beta_amio*u_amiodarone_scaled);
 
   vector<lower=0>[u_n] u_C = rep_vector(0.0, u_n);
 
@@ -106,6 +107,8 @@ transformed parameters{
   }
   u_C = u_C + concentration(u_time, u_D, u_F, u_Cl, u_ka, u_ke);
 
+  
+  
 }
 model{
   //See Byon et. al 2019
@@ -132,7 +135,7 @@ model{
   beta_t ~ normal(0, 0.25);
   beta_a ~ normal(0, 0.25);
   beta_amio ~ double_exponential(0, tau_F);
-  beta_dil ~ double_exponential(0, tau_F);
+  // beta_dil ~ double_exponential(0, tau_F);
   tau_F ~ normal(0, 0.25);
   
   r_sigma ~ lognormal(log(0.1), 0.2);
@@ -143,5 +146,5 @@ model{
 generated quantities{
   real r_yppc[r_n] = lognormal_rng(log(r_C), r_sigma);
   real u_yppc[u_n] = lognormal_rng(log(u_C), u_sigma);
-  vector[r_n + u_n] catconc = append_array(r_C, u_C);
 }
+

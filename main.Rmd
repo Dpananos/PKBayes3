@@ -26,9 +26,6 @@ library(tidyverse)
 library(rstanarm)
 library(tidybayes)
 library(cmdstanr)
-library(rms)
-library(posterior)
-library(rsample)
 library(duckdb)
 library(DBI)
 source('R/utils.R')
@@ -40,14 +37,31 @@ cmdstanr::register_knitr_engine(override = F)
 
 # Introduction
 
-Apixaban is a direct acting oral anti-coagulant often prescribed for prevention of stroke and systemic embolism in patients with atrial fibrillation (AF) [-@BMSmonograph; -@byon2019apixaban].  Studies as recent as 2019 have reported excess variability in observed apixaban plasma concentrations in patients with AF [-@sukumar2019apixaban]. Since apixaban plasma concentrations correlate closely with anti-coagulation[-@upreti2013effect,-@frost2013safety,-@frost2013apixaban], excess variability in these concentrations may mean increased risk of bleeding. These findings raise questions towards the optimal dosing of apixaban in older adults with AF encountered outside of clinical trials.
+A prominent challenge in health research is knowledge translation from experimental results to clinical application. In the former, a small group of subjects under highly controlled circumstances allow for a quality and quantity of observations to be achived above what might be reasonable in clinical application. This leads to experiments with good internal validity.  However, experimental results may fail to externally validate because of their highly controlled nature, and possibly stringent inclusion/exclusion criteria.  On the other hand, clinical results have high external validity (in so far as they are from the population of interest), and may allow for additional clinical data to be recorded which may not be used in experimental results. The observational nature of these results brings internal validity into question (for example, the functional form of the estimated conditional mean or potential omission of confounders known or unknown).  The synthesis of information between the two types of results in light of these shortcomings is the challenge.
+
+In this study, we seek to demonstrate one way in which experimental results *can* be combined with clinical results, focusing on an application in pharmacokinetics.  Presently, studies using data obtained from clinical measurements use biologically implausible models.  We demonstrate how these studies could use biologically plausible models informed by high quality experimental data to achieve their goals. Additionally our model can
+
+* integrate over all uncertainty in the data for decision making
+* make more precise counter factual estimations (e.g. what would happen if the elimination rate decreased)
+* avoid pitfalls of log linear models
+
+which were previously unable to be performed.
+
+
+
+
+# Background
+
+## Apixaban
+
+Our study uses clinical and experimental plasma concentrations from patients who were prescribed apixaban. Apixaban is a direct acting oral anti-coagulant often prescribed for prevention of stroke and systemic embolism in patients with atrial fibrillation (AF) [-@BMSmonograph; -@byon2019apixaban].  Studies as recent as 2019 have reported excess variability in observed apixaban plasma concentrations in patients with AF [-@sukumar2019apixaban]. Since apixaban plasma concentrations correlate closely with anti-coagulation[-@upreti2013effect,-@frost2013safety,-@frost2013apixaban], excess variability in these concentrations may mean increased risk of bleeding. These findings have raised questions towards the optimal dosing of apixaban in older adults with AF encountered outside of clinical trials.
 
 Additional research into determining factors which explain this excess variability beyond known clinical factors [-@gulilat2020drug] has consequently begun.  Models presented in this research consider the effect of covariates $(\mathbf{x})$, as well as time $(t)$, to be linear on the log concentration $(\log(y))$ scale.  The models are then of the form
 
 $$ \log(y) = \beta_t  t + \mathbf{x} \beta + \varepsilon\>. $$
 \noindent Here $\varepsilon$ is observational noise on the log scale with mean 0 and finite variance $\sigma^2$.
 
-Log-linear models can be useful when the pharmacokinetics in the elimination phase are approximately exponential (as would be the case in a first order elimination compartmental model).  However, their usefulness in estimating effects of various factors on plasma concentrations for use in downstream decision making for dose size is questionable under three important limitations:
+Log-linear models can be useful when the pharmacokinetics in the elimination phase are approximately exponential (as would be the case in a first order elimination compartmental model).  However, their usefulness in estimating effects of various factors on plasma concentrations for use in downstream decision making for dose size is questionable considering three important limitations:
 
 1) Log-linear models as presented in [@gulilat2020drug] use a single parameter for the effect of time on log plasma concentrations.  The consequence is that all patients -- regardless of clinical factors -- are given the same elimination rate despite it being known that elimination of apixaban is modulated by clinical factors, such as renal function **CITATION**.  Elimination partly determines trough concentrations, and use of log-linear models to make decisions which are functions of trough concentration (e.g. prescribe a dose so that there is some acceptable risk of exceeding some trough concentration threshold) can be effected.  This problem can be avoided by allowing interactions between time and known modulators of elimination rate, but estimates may suffer from low precision.
 
@@ -57,24 +71,10 @@ Log-linear models can be useful when the pharmacokinetics in the elimination pha
 3) The interpretation of the coefficients for covariates aside from time, $\beta$, represent the change in expected log concentration due to a unit change in the associated covariate.  However, where this change manifests in the pharmacokinetics is is underdetermined.  For example, [@gulilat2020drug] identified concomitant amiodarone is associated with an increase in log-concentrations.  Could this be because an increase in bio availability, or a decrease in clearance, or some other reason?
 
 
-All of these limitations can be ameliorated, if not completely avoided, by modelling the pharmacokientics directly using population pharmacokientic (popPK) models.  PopPK models allow users to specify which covariates effect which aspects of the pharmacokientcs directly, resolving issues 1 and 3.  Additionally, modelling the time evolution of the concentration using a compartmental model may reduce bias in estimation of max concentration, resolving issue 2.  However, fitting popPK models usually requires access to proporiety software such as NONMEM **CITATION** or monolix **CITATION**, which can be prohibitive.  Open source tools are free with rich communities of users from across a multitude of disciplines, including pharmacology, applied mathematics, and applied statistics.  The ability to fit popPK models in these free tools is therefore of great benefit.
-
-This paper presents a Bayesian popPK model written in an open source Bayesian language.  We choose an open source language to make results widely available to investigators, and we choose a Bayesian approach to demonstrate a) how these models can be used in decision making processes regarding dose, and b) how prior information from apixaban studies can be incorporated into these models.  Our model is fit using 401 observations of apixaban concentrations collected from patients in London, Ontario seeing a personalized medicine clinic.  We supplement these data with data from a highly controlled experiment on pharmacokinetics so increase precision on estimated coefficients. 
-
-I'm not sure what we conclude yet.
-
+Although a log linear model may be a feasible approximation when the data come from the elimination phase of the kinetics, generally a log linear model is biologically infeasible.  The aformentioned limitations then are a consequence of this infeasibility.  Below, we outline how a one compartment pharmacokientic model with first order elimination can be used to fit data from clinical studies.  We leverage experimental data on apixaban concentrations to supplement the model.
 
 ## Methods
 
-# Data Collection
-
-Ute or some other pharm person can maybe provide insight into this.
-
-# Statistical Analysis
-
-## Rommel's Data (Dataset 1)
-
-## Ute's Data (Dataset 2)
 
 ## Bayesian Model
 
@@ -104,12 +104,12 @@ Where $b$ is a beta distributed random variable with parameters learned from the
 We use a one compartment pharmacokinetic model with first oder elimination as our conditional mean
 
 $$  C_{j}(t)= \begin{cases}\frac{F \cdot D}{C l_j} \frac{k_{e, j} \cdot k_{a, j}}{k_{e, j}-k_{a, j}}\left(e^{-k_{a, j}(t-\delta_j)}-e^{-k_{e, j}(t-\delta_j)}\right) & \delta_j \leq t \\ 0 & \text { else }\end{cases} \>. $$
-Where we have used the facts that
+Here, all parameters are estimated from data, and we have used the facts that
 
 $$ t_{\max }=\frac{\ln \left(k_{a}\right)-\ln \left(k_{e}\right)}{k_{a}-k_{e}} $$
 $$ \alpha = \dfrac{k_e}{k_a} $$
 
-In order to solve for $k_e$ and $k_a$ for use in our PK model.  Finally, we specify a lognormal likelihood for dataset 1
+in order to solve for $k_e$ and $k_a$ for use in our PK model.  Finally, we specify a lognormal likelihood for dataset 1
 
 $$ y_j \sim \mbox{Lognormal}(\log(C_j(t)), \sigma) \>. $$
 
@@ -129,9 +129,14 @@ $$\operatorname{logit}(a) = \mu_\alpha + X\beta_{\alpha} $$
 
 Where the $mu$ and the $\beta$ are shared between datasets.  Additionally, we model the bioavailbility as 
 
-$$ \opteraorname{logit}(F) = \mu_F   + \beta \mbox{amiodarone}$$
+$$ \operatorname{logit}(F) = \mu_F   + \beta_{amio} \mbox{amiodarone}$$
 
-as dataset 2 has information regarding concomitant amiodarone.  Finally, data from dataset 2 comes from patients who have been taking apixaban twice daily.  Hence, their initial plasma concentration on ingestion is not 0, but can be modeled using the pharmacokientics none the less.  Assuming the patients have been taking apixaban twice a day, 12 hours apart, for the last 5 days, the initial concentration can be shown to be
+as dataset 2 has information regarding concomitant amiodarone.  We place a double exponential (often reffered to as a Laplace) prior on the effect of amiodarone 
+
+$$ p(\beta_{amio}) = \operatorname{Laplace}(0, \tau_F) $$
+as well as a prior on $tau_F$, the scale of the double exponential.  This is equivalent to a LASSO penalty on the effect of amiodarone.
+
+Finally, data from dataset 2 comes from patients who have been taking apixaban twice daily.  Hence, their initial plasma concentration on ingestion is not 0, but can be modeled using the pharmacokientics none the less.  Assuming the patients have been taking apixaban twice a day, 12 hours apart, for the last 5 days, the initial concentration can be shown to be
 
 $$ c_0 = \sum_{j=1}^{10} y(12j) \>. $$
 
@@ -194,6 +199,20 @@ rommel_fit %>%
   geom_pointrange(size=0.1)+
   geom_abline(color='dark grey')+
   facet_wrap(~dataset, scale='free')
+```
+
+```{r}
+
+fit %>% 
+  spread_draws(mu_F, beta_amio) %>% 
+  crossing(amio_dose = seq(0, 1.0, 0.25)) %>% 
+  mutate(effective_dose = 5.0*plogis(mu_F + amio_dose*beta_amio),
+        dose_label = factor(str_c(400*amio_dose, ' mg/day'))) %>% 
+  
+  select(dose_label, effective_dose) %>% 
+  ggplot(aes(effective_dose, dose_label))+
+  stat_gradientinterval(fill='red')+
+  labs(y='Amiodarone', x='Effective dose of apixaban mg')
 ```
 
 
