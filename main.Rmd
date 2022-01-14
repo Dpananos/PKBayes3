@@ -78,11 +78,11 @@ Although a log linear model may be a feasible approximation when the data come f
 
 ## Bayesian Model
 
-Our model specifies a population level effect of covariates (age, sex, weight (kg), serum creatinine $\mu \mbox{mol}$) on patient clearance, time to max concentration, and the ratio between absorption and elimination rates (a untiless parameter we refer to as $\alpha$). These effects are shared between the two populations, allowing information from one dataset to partially inform model fit on the other.  We also include a population level effect of concomitant amidarone on bioavailability of apixaban.  
+Our model specifies a population level effect of covariates (age, sex, weight (kg), serum creatinine $\mu \mbox{mol}$) on patient clearance, time to max concentration, and the ratio between absorption and elimination rates (a unitless parameter we refer to as $\alpha$). These effects are shared between the two populations, allowing information from one dataset to partially inform model fit on the other.  We also include a population level effect of concomitant amidarone on bioavailability of apixaban.  
 
-We fit our model using Stan [-@gelman2015stan], an open source probabilistic programming language with interfaces to Python, R, Stata, Matlab, and more.  Fittting two datasets jointly is formally equivalent to fitting one dataset first and passing the posterior as a prior for a model for the other dataset.  However, such an approach requires summarization of the posterior, which may result in loss of information (such as covariance between draws, unless explicitly modeled).  The recomended approach is then to fit datasets jointly, as done in [-@fallingBetancourt].
+We fit our model using Stan [-@gelman2015stan], an open source probabilistic programming language with interfaces to Python, R, Stata, Matlab, and more.  Fittting two datasets jointly is formally equivalent to fitting one dataset first and passing the posterior as a prior for a model for the other dataset.  However, such an approach requires summarization of the posterior, which may result in loss of information (such as covariance between draws, unless explicitly modeled).  The recommended approach is then to fit datasets jointly, as done in [-@fallingBetancourt].
 
-### Dataset 1 Model
+### Experimental Data (Dataset 1) Model
 
 Since patients are observed multiple times in these data, this offers the opportunity to estimate random effects for Clearence $Cl$, time to mac concentration $t_{\max}$, ratio between elimination and absorption rates $\alpha = k_e/k_a$.
 
@@ -101,7 +101,7 @@ $$ \delta_j = 0.5 \times b  $$
 
 Where $b$ is a beta distributed random variable with parameters learned from the data.  The factor of 0.5 is used to ensure that at $t=0.5$ hours after ingestion, the predicted to be non-zero.
 
-We use a one compartment pharmacokinetic model with first oder elimination as our conditional mean
+We use a one compartment pharmacokinetic model with first order elimination as our conditional mean
 
 $$  C_{j}(t)= \begin{cases}\frac{F \cdot D}{C l_j} \frac{k_{e, j} \cdot k_{a, j}}{k_{e, j}-k_{a, j}}\left(e^{-k_{a, j}(t-\delta_j)}-e^{-k_{e, j}(t-\delta_j)}\right) & \delta_j \leq t \\ 0 & \text { else }\end{cases} \>. $$
 Here, all parameters are estimated from data, and we have used the facts that
@@ -111,7 +111,7 @@ $$ \alpha = \dfrac{k_e}{k_a} $$
 
 in order to solve for $k_e$ and $k_a$ for use in our PK model.  Finally, we specify a lognormal likelihood for dataset 1
 
-$$ y_j \sim \mbox{Lognormal}(\log(C_j(t)), \sigma) \>. $$
+$$ y_j \sim \mbox{Lognormal}(C_j(t), \sigma) \>. $$
 
 For information of prior distributions, see our supplement.
 
