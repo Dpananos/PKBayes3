@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.14159265-2.6-1.40.21 (TeX Live 2020) (preloaded format=pdflatex 2020.4.7)  13 JAN 2022 19:53
+This is pdfTeX, Version 3.14159265-2.6-1.40.21 (TeX Live 2020) (preloaded format=pdflatex 2020.4.7)  13 JAN 2022 21:23
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -700,7 +700,7 @@ Missing character: There is no ; in font nullfont!
 Missing character: There is no ; in font nullfont!
 Missing character: There is no ; in font nullfont!
 
-Overfull \hbox (7.71036pt too wide) in paragraph at lines 128--129
+Overfull \hbox (7.71034pt too wide) in paragraph at lines 128--129
  [][] 
  []
 
@@ -709,7 +709,7 @@ Overfull \hbox (7.71036pt too wide) in paragraph at lines 128--129
 Here is how much of TeX's memory you used:
  15423 strings out of 480608
  330720 string characters out of 5903631
- 593287 words of memory out of 5000000
+ 593218 words of memory out of 5000000
  31046 multiletter control sequences out of 15000+600000
  535847 words of font info for 36 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
@@ -720,7 +720,7 @@ ts/cm/cmmib10.pfb></usr/local/texlive/2020/texmf-dist/fonts/type1/public/amsfon
 ts/cm/cmr10.pfb></usr/local/texlive/2020/texmf-dist/fonts/type1/public/amsfonts
 /cm/cmr12.pfb></usr/local/texlive/2020/texmf-dist/fonts/type1/public/amsfonts/c
 m/cmr7.pfb>
-Output written on model_net.pdf (1 page, 51072 bytes).
+Output written on model_net.pdf (1 page, 51081 bytes).
 PDF statistics:
  31 PDF objects out of 1000 (max. 8388607)
  22 compressed objects within 1 object stream

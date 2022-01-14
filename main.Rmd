@@ -37,7 +37,7 @@ cmdstanr::register_knitr_engine(override = F)
 
 # Introduction
 
-A prominent challenge in health research is knowledge translation from experimental results to clinical application. In the former, a small group of subjects under highly controlled circumstances allow for a quality and quantity of observations to be achieved above what might be reasonable in clinical application. This leads to experiments with good internal validity.  However, experimental results may fail to externally validate because of their highly controlled nature, and possibly stringent inclusion/exclusion criteria.  On the other hand, clinical results have high external validity (in so far as they are from the population of interest), and may allow for additional clinical data to be recorded which may not be used in experimental results. The observational nature of these results brings internal validity into question (for example, the functional form of the estimated conditional mean or potential omission of confounders known or unknown).  The synthesis of information between the two types of results in light of these shortcomings is the challenge.
+A prominent challenge in health research is knowledge translation from experimental results to clinical application. In the former, a small group of subjects under highly controlled circumstances allow for a quality and quantity of observations to be achieved above what might be capable in clinical application. This leads to experiments with good internal validity.  However, experimental results may fail to externally validate because of their highly controlled nature, and possibly stringent inclusion/exclusion criteria.  On the other hand, clinical results have high external validity (in so far as they are from the population of interest), and may allow for additional clinical data to be recorded which may not be used in experimental results. The observational nature of these results brings internal validity into question (for example, the functional form of the estimated conditional mean or potential omission of confounders known or unknown).  The synthesis of information between the two types of results in light of these shortcomings is the challenge.
 
 In this study, we seek to demonstrate one way in which experimental results *can* be combined with clinical results, focusing on an application in pharmacokinetics.  Presently, studies using data obtained from clinical measurements use biologically implausible models.  We demonstrate how these studies could use biologically plausible models informed by high quality experimental data to achieve their goals. Additionally our model can
 
@@ -88,12 +88,12 @@ Since patients are observed multiple times in these data, this offers the opport
 
 Let $X$ be a matrix of mean centered and standardized covariates for dataset 1.  For patient $j$, we model the pharmacokientic parameters as
 
-$$ Cl_{j} \sim \mbox{Lognormal}(\mu_{Cl} + X\beta_{Cl}, \sigma_Cl)  $$
-$$ t_{\max,j} \sim \mbox{Lognormal}(\mu_{t_{\max}} + X\beta_{t_{max}}, \sigma_{t_{\max}})  $$
+$$ \log(Cl_{j}) = \mu_{Cl} + X\beta_{Cl} + z_{Cl, j} \sigma_{Cl}  $$
+$$ \log(t_{\max,j}) = \mu_{t_{\max}} + X\beta_{t_{max}} + z_{t_{\max, j}}\sigma_{t_{\max}}  $$
 
-$$ \alpha_{j} \sim \mbox{Logitnormal}(mu_{\alpha} + X\beta_{\alpha}, \sigma_{\alpha})  $$
+$$ \operatorname{logit}(\alpha_{j})  =  \mu_{\alpha} + X\beta_{\alpha} + z_{\alpha, j}\sigma_{\alpha}  $$
 
-Here, the $\mu$ are the population level means for the indicated pharmacokinetic parameters, and the $\beta$ are the regression coefficients. Additionally, we model the population mean for the bioavailability as $F = 1/(1 + e^{\mu_F}$, with a prior on $\mu_F$.  Both the $\mu$ and the $\beta$ are shared between datasets.
+Here, the $\mu$ are the population level means for the indicated pharmacokinetic parameters, the $\beta$ are the regression coefficients, the $z$ are standard normal random variables to account for random effects, and the $\sigma$ are the standard deviations of the population distribution for the indicated pharmacokinetic parameters. Additionally, we model the population mean for the bioavailability as $F = 1/(1 + e^{\mu_F}$, with a prior on $\mu_F$.  Both the $\mu$ and the $\beta$ are shared between datasets.
 
 For dataset 1, we also model a delay between ingestion and absorption of apixaban.  The delay is modeled as 
 
@@ -111,17 +111,17 @@ $$ \alpha = \dfrac{k_e}{k_a} $$
 
 in order to solve for $k_e$ and $k_a$ for use in our PK model.  Finally, we specify a lognormal likelihood for dataset 1
 
-$$ y_j \sim \mbox{Lognormal}(C_j(t), \sigma) \>. $$
+$$ y_j \sim \mbox{Lognormal}(C_j(t), \sigma_1) \>. $$
 
 For information of prior distributions, see our supplement.
 
-### Dataset 2 Model
+### Observational (Dataset 2) Model
 
 Much of the structure from the previous model is translated to dataset 2.  However, there are a few differences.
 
 Because patients in this dataset are not measured multiple times we do not estimate random effects or a time delay.  Hence, we model
 
-$$ \log(CL) = \mu_{Cl} + X\beta_{Cl} $$
+$$ \log(Cl) = \mu_{Cl} + X\beta_{Cl} $$
 
 $$ \log(t_{\max}) = \mu_{t_{\max}} + X\beta_{t_{\max}} $$
 
@@ -131,23 +131,21 @@ Where the $mu$ and the $\beta$ are shared between datasets.  Additionally, we mo
 
 $$ \operatorname{logit}(F) = \mu_F   + \beta_{amio} \mbox{amiodarone}$$
 
-as dataset 2 has information regarding concomitant amiodarone.  We place a double exponential (often reffered to as a Laplace) prior on the effect of amiodarone 
-
-$$ p(\beta_{amio}) = \operatorname{Laplace}(0, \tau_F) $$
-as well as a prior on $tau_F$, the scale of the double exponential.  This is equivalent to a LASSO penalty on the effect of amiodarone.
+as dataset 2 has information regarding concomitant amiodarone.  
 
 Finally, data from dataset 2 comes from patients who have been taking apixaban twice daily.  Hence, their initial plasma concentration on ingestion is not 0, but can be modeled using the pharmacokientics none the less.  Assuming the patients have been taking apixaban twice a day, 12 hours apart, for the last 5 days, the initial concentration can be shown to be
 
-$$ c_0 = \sum_{j=1}^{10} y(12j) \>. $$
+$$ C_0 = \sum_{j=1}^{10} C(12j) \>. $$
 
-Here, $y(t)$ is the pharmacokintic profile with estimated coefficients for that patient.  See our supplement for a proof of this proposition.
+Here, $C(t)$ is the pharmacokintic profile with estimated coefficients for that patient.  See our supplement for a proof of this proposition.
 
 Our pharmacokientic profile is again provided by a one compartment first order elimination 
 
 $$  C(t)= c_0 + \frac{F \cdot D}{C l} \frac{k_{e} \cdot k_{a}}{k_{e}-k_{a}}\left(e^{-k_{a}(t)}-e^{-k_{e}(t)}\right)  $$
 and we assume a lognormal likelihood
 
-$$ y_j \sim \mbox{Lognormal}(\log(C(t)), \sigma) \>. $$
+$$ y_j \sim \mbox{Lognormal}(C(t), \sigma_2) \>. $$
+Note the likelihood for dataset 2 has a different observational noise component ($\sigma_2$) as compared to dataset 1 ($\sigma_1$).  This is because random effects can not be estimated from dataset 2, hence the residual variance is part observational noise and part between subject variability conditional on the subject covariates.
 
 # Results
 
