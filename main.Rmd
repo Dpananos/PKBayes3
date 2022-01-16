@@ -155,8 +155,9 @@ con = dbConnect(duckdb(),'data/database/apixaban_data.duckdb')
 ute_data = tbl(con, 'ute_cleaned_data') %>% 
            collect() %>% 
            mutate(
-             dataset = 'Dataset 2'
-           )
+             dataset = 'Dataset 2',
+             i = seq_along(subjectids)
+           ) 
 
 rommel_data = tbl(con, 'rommel_cleaned_data') %>% 
               collect() %>% 
@@ -165,13 +166,13 @@ rommel_data = tbl(con, 'rommel_cleaned_data') %>%
                 dataset = 'Dataset 1'
                 )
 
-dbDisconnect(con)
+dbDisconnect(con, shutdown=T)
 
 
 ```
 
 ```{r load-in-model}
-fit = readRDS('model_008.RDS')
+fit = readRDS('model_009.RDS')
 ```
 
 
@@ -197,6 +198,12 @@ rommel_fit %>%
   geom_pointrange(size=0.1)+
   geom_abline(color='dark grey')+
   facet_wrap(~dataset, scale='free')
+
+MLmetrics::R2_Score(
+  
+  log(ute_fit$predictions),
+  log(ute_fit$yobs_ng_ml)
+)
 ```
 
 ```{r}
@@ -212,6 +219,40 @@ fit %>%
   stat_gradientinterval(fill='red')+
   labs(y='Amiodarone', x='Effective dose of apixaban mg')
 ```
+
+
+```{r}
+
+conc = function(time, d, f,cl, ke, ka, c0){
+  d*f*ke*ka/(cl*(ke-ka)) * (exp(-ka*time) - exp(-ke*time)) + c0
+}
+
+preds = fit %>% 
+  spread_draws(u_Cl[i], u_ke[i], u_ka[i], u_F[i], u_C0[i], ndraws = 1000) %>% 
+  left_join(ute_data) %>% 
+  crossing(time = seq(0, 12, 0.5)) %>% 
+  mutate(
+    y = conc(time, dose_mg_twice_daily, u_F, u_Cl, u_ke, u_ka, u_C0)
+  ) %>% 
+  ungroup %>% 
+  group_by(i, time) %>% 
+  mean_qi(y)
+
+preds %>% 
+  left_join(ute_data) %>% 
+  ggplot(aes(time, y, color=sex, group = i))+
+  geom_line()+
+  facet_grid(~sex)+
+  theme(aspect.ratio = 0.62,
+        legend.position = 'bottom')
+```
+
+
+```{r}
+fit %>% 
+  spread_draws(r_tmax[i])
+```
+
 
 
 
