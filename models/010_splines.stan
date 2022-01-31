@@ -12,9 +12,6 @@ data{
   vector[r_n] r_yobs; //Observed concentraitons
   
   vector[r_n_subjectids] r_is_male;
-  vector[r_n_subjectids] r_weight;
-  vector[r_n_subjectids] r_creatinine;
-  vector[r_n_subjectids] r_age;
   vector[r_n_subjectids] r_D;
   
   //Ute's data
@@ -29,25 +26,15 @@ data{
   vector[u_n] u_D;
   vector[u_n] u_amiodarone;
   vector[u_n] u_diltiazem;
-
-}
-transformed data{
-  vector[r_n_subjectids] r_scaled_weight = (r_weight - mean(r_weight))/sd(r_weight);
-  vector[r_n_subjectids] r_scaled_age = (r_age - mean(r_age))/sd(r_age);
-  vector[r_n_subjectids] r_scaled_creatinine = (r_creatinine - mean(r_creatinine))/sd(r_creatinine);
-  matrix[r_n_subjectids, 4] X = [r_is_male', r_scaled_weight', r_scaled_creatinine', r_scaled_age']';
-  vector[r_n] r_yobs_scaled = r_yobs/1000;
   
+  int<lower=0> n_basis;
+  matrix[r_n_subjectids, n_basis] r_age_spline;
+  matrix[r_n_subjectids, n_basis] r_weight_spline;
+  matrix[r_n_subjectids, n_basis] r_creat_spline;
   
-  vector[u_n] u_scaled_weight = (u_weight - mean(r_weight))/sd(r_weight);
-  vector[u_n] u_scaled_age = (u_age - mean(r_age))/sd(r_age);
-  vector[u_n] u_scaled_creatinine = (u_creatinine - mean(r_creatinine))/sd(r_creatinine);
-  vector[u_n] u_yobs_scaled = u_yobs/1000;
-  matrix[u_n, 4] u_X = [u_is_male', u_scaled_weight', u_scaled_creatinine', u_scaled_age']';
-  
-  vector[u_n] u_amiodarone_scaled = u_amiodarone/max(u_amiodarone);
-  vector[u_n] u_diltiazem_scaled = u_diltiazem/max(u_diltiazem);
-  vector[24] tpred;
+  matrix[u_n, n_basis] u_age_spline;
+  matrix[u_n, n_basis] u_weight_spline;
+  matrix[u_n, n_basis] u_creat_spline;
 
 }
 parameters{
@@ -88,7 +75,7 @@ parameters{
   // real b_a_is_male;
   real b_a_creatinine;
   
-  real b_F_amio;
+  real beta_amio;
   // real beta_dil;
   real<lower=0> tau_F;
 }
@@ -110,7 +97,7 @@ transformed parameters{
   vector<lower=0, upper=1>[u_n] u_alpha = inv_logit(mu_alpha+ b_a_creatinine*u_scaled_creatinine);
   vector<lower=0>[u_n] u_ka = log(u_alpha)./(u_tmax .* (u_alpha-1));
   vector<lower=0>[u_n] u_ke = u_alpha .* u_ka;
-  vector<lower=0, upper=1>[u_n] u_F = inv_logit(mu_F + b_F_amio*u_amiodarone_scaled);
+  vector<lower=0, upper=1>[u_n] u_F = inv_logit(mu_F + beta_amio*u_amiodarone_scaled);
 
   vector<lower=0>[u_n] u_C = rep_vector(0.0, u_n);
   vector<lower=0>[u_n] u_C0 = rep_vector(0.0, u_n);
@@ -159,7 +146,7 @@ model{
   // b_a_is_male ~ normal(0, 0.25);
   b_a_creatinine ~ normal(0, 0.25);
   
-  b_F_amio ~ double_exponential(0, tau_F);
+  beta_amio ~ double_exponential(0, tau_F);
   // beta_dil ~ double_exponential(0, tau_F);
   tau_F ~ normal(0, 0.25);
   

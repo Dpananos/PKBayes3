@@ -37,18 +37,36 @@ cmdstanr::register_knitr_engine(override = F)
 
 # Introduction
 
-A prominent challenge in health research is knowledge translation from experimental results to clinical application. In the former, a small group of subjects under highly controlled circumstances allow for a quality and quantity of observations to be achieved above what might be capable in clinical application. This leads to experiments with good internal validity.  However, experimental results may fail to externally validate because of their highly controlled nature, and possibly stringent inclusion/exclusion criteria.  On the other hand, clinical results have high external validity (in so far as they are from the population of interest), and may allow for additional clinical data to be recorded which may not be used in experimental results. The observational nature of these results brings internal validity into question (for example, the functional form of the estimated conditional mean or potential omission of confounders known or unknown).  The synthesis of information between the two types of results in light of these shortcomings is the challenge.
+One goal of personalized medicine is optimized dosing of drugs for individuals [-@morse2015personalized].  When considering optimal doses, a thorough understanding pharmacokinetic (what the body does to the drug) and/or pharmacodynamic (what the drug does to the body) effects are crucial.  To this end, models describing the mediation of pharmacokinetic effects via clinical, genetic, and lifestyle factors have an important role in deciding which patients should get what dose.
 
-In this study, we seek to demonstrate one way in which experimental results *can* be combined with clinical results, focusing on an application in pharmacokinetics.  Presently, studies using data obtained from clinical measurements use biologically implausible models.  We demonstrate how these studies could use biologically plausible models informed by high quality experimental data to achieve their goals. Additionally our model can
+For the oral anticoagulant apixaban, pharmacokinetic models have been previously published [-@cirincione2018population, -@ueshima2018population] in collaboration with drug manufacturers using data from clinical trials.  These studies identified age, sex, body weight, renal function,  patient race, and CYP3A4 inhibitors as modulators of apixaban pharmacokientics [-@cirincione2018population], though according to authors the effects of some of these variables were not large enough to require clinical dose adjustment. However, even after adjusting for the aforementioned factors, concentrations of apixaban in real life applications have been observed to be larger than what was reported in clinical trials [-@sukumar2019apixaban], raising questions as to the optimal dosing of apixaban for patients outside these trials. Additionally, recent research has indicated appropriateness of dose adjustment criteria are unclear [-@vu2021critical], citing there is no reduction in safety in patients above 75 years of age, below 60kg of body weight, and egfr lower than50 mL/min.  
 
-* integrate over all uncertainty in the data for decision making
-* make more precise counter factual estimations (e.g. what would happen if the elimination rate decreased)
-* avoid pitfalls of log linear models
+The uncertainty regarding dosing criteria and additional variability in concentrations in day to day use suggest that, while previously published models may be internally valid, these models may not be representative of all populations in which apixaban is to be applied.  That is to say, the models may lack external validity.  Creating similar pharmacokinetic models for use in a specific population may have two goals:  to adjust dosing criteria to be specific for a population, and/or to explore how additional variables not included in the aforementioned studies effect particular parts of the pharmacokinetics of apixaban.  This study seeks to demonstrate how investigators can fit similar models to their pharmacokinetic data with the aim of accomplishing these goals.
 
-which were previously unable to be performed.
+We leverage a Bayesian approach to building pharmacokinetic models so that we may incorporate prior information from previous studies. Additionally, we describe how investigators can use *all* relevant data available to them to fit these models and make inferences.  Finally, we show how sparsity inducing priors can be applied to new variables in order to explore how those variables may effect apixaban pharmacokinetics, encouraging small effects but allowing for large effects to be detected.  Finally, we use an open source Bayesian language to develop our models, making our code freely available.  Previous models are constructed in a proprietary software toolset, which can come at a high cost. Creation of these models in a free tool removes a barrier to research, making these methods more widely available.
 
 
 
+
+* Part of the goal of personalized medicine is to optimize drug therapies while controlling the risk of adverse events [-@morse2015personalized]
+* A utpoic goal may be to have centralized personalization; one resource we can look to and ask how to optimize a therapy for this patient, regardless of where that patient comes from.
+* Though laudable, the reality is that drug concentrations can be more variable than what is observed in clinical trials [-@sukumar2019apixaban].  This excess variability makes centralized personalization difficult.
+*  Though existing models PK for some drugs may suffer from a lack of external validity, the information contained therein is still a good starting point.  In particular, if a Bayesian approach is used, then model effects form previous studies can be passed as prior information.
+
+* Additionally, Bayesian techniques allow for more expressive and thoughtful modelling, allowing data from well controlled clinical studies as well as real life data to be used in the modelling procedure.
+* The result is (maybe) a model which uses existing information as a starting point but is *personalized* to the population you care about, using all data available to you.
+* We demonstrate this workflow using apixaban.  Apixaban's pharmacodynamic effect is closely correlated to blood plasma levels [-@upreti2013effect,-@frost2013safety,-@frost2013apixaban, so work with concentrations directly.
+* Additionally, if we have additional covariates we are interested in exploring, we can incorporate these into our model to estimate additional effects in our population.  Relying on previously published models for dosing recomendations may leave infomration on the table.
+
+
+
+
+* Data probably not available, what do you do?
+* Priors from papers
+* Combine all the data you can get in a smart way
+* Can explore *and* personalize with this model
+* Here are some things you can do
+* In conclusion, its insane that this data is private.  Don't get soapboaxy, but if we had them we could incorporate into the model.
 
 # Background
 
@@ -56,22 +74,7 @@ which were previously unable to be performed.
 
 Our study uses clinical and experimental plasma concentrations from patients who were prescribed apixaban. Apixaban is a direct acting oral anti-coagulant often prescribed for prevention of stroke and systemic embolism in patients with atrial fibrillation (AF) [-@BMSmonograph; -@byon2019apixaban].  Studies as recent as 2019 have reported excess variability in observed apixaban plasma concentrations in patients with AF [-@sukumar2019apixaban]. Since apixaban plasma concentrations correlate closely with anti-coagulation[-@upreti2013effect,-@frost2013safety,-@frost2013apixaban], excess variability in these concentrations may mean increased risk of bleeding. These findings have raised questions towards the optimal dosing of apixaban in older adults with AF encountered outside of clinical trials.
 
-Additional research into determining factors which explain this excess variability beyond known clinical factors [-@gulilat2020drug] has consequently begun.  Models presented in this research consider the effect of covariates $(\mathbf{x})$, as well as time $(t)$, to be linear on the log concentration $(\log(y))$ scale.  The models are then of the form
-
-$$ \log(y) = \beta_t  t + \mathbf{x} \beta + \varepsilon\>. $$
-\noindent Here $\varepsilon$ is observational noise on the log scale with mean 0 and finite variance $\sigma^2$.
-
-The usefulness of these models in estimating effects of various factors on plasma concentrations for use in downstream decision making for dose size is questionable considering three important limitations:
-
-1) Log-linear models as presented in [@gulilat2020drug] use a single parameter for the effect of time on log plasma concentrations.  The consequence is that all patients -- regardless of clinical factors -- are given the same elimination rate despite it being known that elimination of apixaban is modulated by clinical factors, such as renal function **CITATION**.  Elimination partly determines trough concentrations, and use of log-linear models to make decisions which are functions of trough concentration (e.g. prescribe a dose so that there is some acceptable risk of exceeding some trough concentration threshold) can be effected.  This problem can be avoided by allowing interactions between time and known modulators of elimination rate, but estimates may suffer from low precision.
-
-2) Due to the linear effect of time, estimates of max concentration suffer from an upward bias.  This bias persists even when time to max concentration is known exactly (which is never the case).  This bias can be small when time to max concentration is large, but can be large when time to max concentration is small.  If decisions on dose are to be made as a function of max concentration (e.g. prescribe a dose so that there is some acceptable risk of exceeding some concentration threshold), use log-linear models can effect decision quality in an appreciable way.
-
-
-3) The interpretation of the coefficients for covariates aside from time, $\beta$, represent the change in expected log concentration due to a unit change in the associated covariate.  However, where this change manifests in the pharmacokinetics is is underdetermined.  For example, [@gulilat2020drug] identified concomitant amiodarone is associated with an increase in log-concentrations.  Could this be because an increase in bio availability, or a decrease in clearance, or some other reason?
-
-
-Although a log linear model may be a feasible approximation when the data come from the elimination phase of the kinetics, generally a log linear model is biologically infeasible.  The aformentioned limitations then are a consequence of this infeasibility.  Below, we outline how a one compartment pharmacokientic model with first order elimination can be used to fit data from clinical studies.  We leverage experimental data on apixaban concentrations to supplement the model.
+Additional research into determining factors which explain this excess variability beyond known clinical factors [-@gulilat2020drug] has consequently begun.
 
 ## Methods
 
@@ -155,7 +158,7 @@ con = dbConnect(duckdb(),'data/database/apixaban_data.duckdb')
 ute_data = tbl(con, 'ute_cleaned_data') %>% 
            collect() %>% 
            mutate(
-             dataset = 'Dataset 2',
+             dataset = "Ute's Data",
              i = seq_along(subjectids)
            ) 
 
@@ -163,7 +166,7 @@ rommel_data = tbl(con, 'rommel_cleaned_data') %>%
               collect() %>% 
               mutate(
                 subjectids = as.character(subjectids),
-                dataset = 'Dataset 1'
+                dataset = "Rommel's Data"
                 )
 
 dbDisconnect(con, shutdown=T)
@@ -177,6 +180,9 @@ fit = readRDS('model_009.RDS')
 
 
 ```{r plot-model-predictions}
+
+# Check for data from one of those data.
+# Public apixaban data?
 rommel_fit = fit %>% 
   spread_draws(r_C[i]) %>% 
   mutate(r_C = 1000*r_C) %>% 
@@ -197,21 +203,37 @@ rommel_fit %>%
   ggplot(aes(log(yobs_ng_ml), log(predictions), ymin = log(.lower), ymax = log(.upper)))+
   geom_pointrange(size=0.1)+
   geom_abline(color='dark grey')+
-  facet_wrap(~dataset, scale='free')
+  facet_wrap(~dataset, scale='free')+
+  theme(aspect.ratio = 0.62)+
+  labs(x='Log Concentration', y='Log Prediction')
+
+ggsave('prediction_v_actual.png', path='figures')
+knitr::plot_crop('figures/prediction_v_actual.png')
 
 MLmetrics::R2_Score(
   
   log(ute_fit$predictions),
   log(ute_fit$yobs_ng_ml)
 )
+
+model = lm(log(yobs_ng_ml) ~ hrs_post_dose + weight_kg + age + sex + dose_mg_twice_daily + creatinine_micromol_l + diltiazem_mg_day + amiodarone_mg_day, data = ute_data)
+
+a = predict(model)
+b = log(ute_fit$predictions)
+c = log(ute_fit$yobs_ng_ml) 
+
+MLmetrics::R2_Score(a, c)
+MLmetrics::R2_Score(b, c)
+plot(a, b)
+abline(0, 1)
 ```
 
 ```{r}
 
 fit %>% 
-  spread_draws(mu_F, beta_amio) %>% 
+  spread_draws(mu_F, b_F_amio) %>% 
   crossing(amio_dose = seq(0, 1.0, 0.25)) %>% 
-  mutate(effective_dose = 5.0*plogis(mu_F + amio_dose*beta_amio),
+  mutate(effective_dose = 5.0*plogis(mu_F + amio_dose*b_F_amio),
         dose_label = factor(str_c(400*amio_dose, ' mg/day'))) %>% 
   
   select(dose_label, effective_dose) %>% 
@@ -238,20 +260,95 @@ preds = fit %>%
   group_by(i, time) %>% 
   mean_qi(y)
 
+
+file_name = 'figures/conc_by_sex.png'
 preds %>% 
   left_join(ute_data) %>% 
-  ggplot(aes(time, y, color=sex, group = i))+
-  geom_line()+
+  ggplot(aes(time, 1000*y, color=sex, group = i))+
+  geom_line(alpha = 0.5, show.legend = F)+
   facet_grid(~sex)+
-  theme(aspect.ratio = 0.62,
-        legend.position = 'bottom')
+  theme(aspect.ratio = 0.62)+
+  labs(x='Hours Post Dose', y='Concentration (ng/ml)')
+
+ggsave(file_name)
+knitr::plot_crop(file_name)
 ```
 
 
 ```{r}
-fit %>% 
-  spread_draws(r_tmax[i])
+
+x = tibble(
+  .var = c('age','amio','creatinine','is','weight'),
+  variable = c('Age','Amiodarone','Creatinine','Is Male', 'Weight')
+)
+
+
+# Clearance
+
+mus = fit %>% 
+      spread_draws(mu_cl) %>% 
+      rename(mu = mu_cl)
+
+cl = fit %>% 
+  spread_draws(`b_cl.*`, regex=T) %>% 
+  mutate(b_cl_Reference=0) %>% 
+  rename(b_cl_male = b_cl_is_male) %>% 
+  pivot_longer(cols=starts_with('b_cl'), names_to='.variable') %>% 
+  left_join(mus) 
+
+#elimination
+
+mus = fit %>% 
+      spread_draws(mu_ke) %>% 
+      rename(mu = mu_ke)
+
+ke = fit %>% 
+  spread_draws(`b_ke.*`, regex=T) %>% 
+  mutate(b_ke_Reference=0) %>% 
+  rename(b_ke_male = b_ke_is_male) %>% 
+  pivot_longer(cols=starts_with('b_ke'), names_to='.variable') %>% 
+  left_join(mus) 
+
+
+# Bio availability
+mus = fit %>% 
+      spread_draws(mu_F) %>% 
+      rename(mu = mu_F)
+
+Fs = fit %>% 
+  spread_draws(`b_F.*`, regex=T) %>% 
+  mutate(b_F_Reference=0) %>% 
+  pivot_longer(cols=starts_with('b_F'), names_to='.variable') %>% 
+  left_join(mus) 
+
+
+
+
+file_name = 'figures/effects.png'
+
+bind_rows(cl, ke, Fs) %>% 
+  separate(.variable, into = c('b','pk','covar')) %>%
+  mutate(covar = if_else(covar=='amio', 'amio (400 mg/day)', covar)) %>% 
+  mutate(
+    estimate = case_when(pk=='F'~plogis(mu + value), T~ exp(value + mu)),
+    covar = str_to_sentence(covar)
+  ) %>% 
+    mutate(covar = factor(covar),
+         covar = relevel(covar, ref='Reference')
+         ) %>% 
+  ggplot(aes(estimate, fct_rev(covar)))+
+  stat_pointinterval()+
+  facet_wrap(~pk, scale = 'free_x')+
+  theme(aspect.ratio = 1)+
+  labs(y='', x='Estimate')
+  
+ggsave(file_name)
+knitr::plot_crop(file_name)
+
+    
 ```
+
+
 
 
 

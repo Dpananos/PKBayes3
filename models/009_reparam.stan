@@ -84,12 +84,12 @@ parameters{
   real b_ke_is_male;
   real b_ke_creatinine;
   
-  real b_a_age;
-  real b_a_weight;
-  real b_a_is_male;
-  real b_a_creatinine;
+  // real b_a_age;
+  // real b_a_weight;
+  // real b_a_is_male;
+  // real b_a_creatinine;
   
-  real beta_amio;
+  real b_F_amio;
   real<lower=0> tau_F;
 }
 transformed parameters{
@@ -108,7 +108,7 @@ transformed parameters{
   vector<lower=0>[u_n] u_ke = exp(mu_ke + b_ke_age*u_scaled_age + b_ke_weight*u_scaled_weight + b_ke_is_male*u_is_male + b_ke_creatinine*u_scaled_creatinine );
   real<lower=0, upper=1> u_alpha = inv_logit(mu_alpha);
   vector<lower=0>[u_n] u_ka = u_ke/u_alpha;
-  vector<lower=0, upper=1>[u_n] u_F = inv_logit(mu_F + beta_amio*u_amiodarone_scaled);
+  vector<lower=0, upper=1>[u_n] u_F = inv_logit(mu_F + b_F_amio*u_amiodarone_scaled);
   
   vector<lower=0>[u_n] u_C = rep_vector(0.0, u_n);
   vector<lower=0>[u_n] u_C0 = rep_vector(0.0, u_n);
@@ -152,12 +152,12 @@ model{
   b_ke_is_male ~ normal(0, 0.25);
   b_ke_creatinine ~ normal(0, 0.25);
   
-  b_a_age ~ normal(0, 0.25);
-  b_a_weight ~ normal(0, 0.25);
-  b_a_is_male ~ normal(0, 0.25);
-  b_a_creatinine ~ normal(0, 0.25);
+  // b_a_age ~ normal(0, 0.25);
+  // b_a_weight ~ normal(0, 0.25);
+  // b_a_is_male ~ normal(0, 0.25);
+  // b_a_creatinine ~ normal(0, 0.25);
   
-  beta_amio ~ double_exponential(0, tau_F);
+  b_F_amio ~ double_exponential(0, tau_F);
   tau_F ~ normal(0, 0.25);
   
   r_sigma ~ lognormal(log(0.1), 0.2);
