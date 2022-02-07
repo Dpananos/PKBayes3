@@ -75,7 +75,7 @@ Our model specifies a population level effect of covariates (age, sex, weight (k
 
 We fit our model using Stan [-@gelman2015stan], an open source probabilistic programming language with interfaces to Python, R, Stata, Matlab, and more.  Fittting two datasets jointly is formally equivalent to fitting one dataset first and passing the posterior as a prior for a model for the other dataset.  However, such an approach requires summarization of the posterior, which may result in loss of information (such as covariance between draws, unless explicitly modeled).  The recommended approach is then to fit datasets jointly, as done in [-@fallingBetancourt].
 
-### Experimental Data (Dataset 1) Model
+### Dense Sampling (Dataset 1) Model
 
 Since patients are observed multiple times in these data, this offers the opportunity to estimate random effects for Clearence $Cl$, time to mac concentration $t_{\max}$, ratio between elimination and absorption rates $\alpha = k_e/k_a$.
 
@@ -108,7 +108,7 @@ $$ y_j \sim \mbox{Lognormal}(C_j(t), \sigma_1) \>. $$
 
 For information of prior distributions, see our supplement.
 
-### Observational (Dataset 2) Model
+### Real Life Data (Dataset 2) Model
 
 Much of the structure from the previous model is translated to dataset 2.  However, there are a few differences.
 
@@ -124,7 +124,7 @@ Where the $mu$ and the $\beta$ are shared between datasets.  Additionally, we mo
 
 $$ \operatorname{logit}(F) = \mu_F   + \beta_{amio} \mbox{amiodarone}$$
 
-as dataset 2 has information regarding concomitant amiodarone.  
+as dataset 2 has information regarding concomitant amiodarone.  The prior for the effect of concomitant amiodarone is a sparsity inducing prior, meaning it encourages negligble effects (near 0) but will allow for large effects to be identified.
 
 Finally, data from dataset 2 comes from patients who have been taking apixaban twice daily.  Hence, their initial plasma concentration on ingestion is not 0, but can be modeled using the pharmacokientics none the less.  Assuming the patients have been taking apixaban twice a day, 12 hours apart, for the last 5 days, the initial concentration can be shown to be
 
@@ -165,7 +165,12 @@ dbDisconnect(con, shutdown=T)
 ```
 
 ```{r load-in-model}
-fit = readRDS('model_009.RDS')
+fit = readRDS('model_008.RDS')
+
+conc = function(time, d, f,cl, ke, ka, c0){
+  d*f*ke*ka/(cl*(ke-ka)) * (exp(-ka*time) - exp(-ke*time)) + c0
+}
+
 ```
 
 
@@ -200,147 +205,28 @@ rommel_fit %>%
 ggsave('prediction_v_actual.png', path='figures')
 knitr::plot_crop('figures/prediction_v_actual.png')
 
-MLmetrics::R2_Score(
-  
-  log(ute_fit$predictions),
-  log(ute_fit$yobs_ng_ml)
-)
-
-model = lm(log(yobs_ng_ml) ~ hrs_post_dose + weight_kg + age + sex + dose_mg_twice_daily + creatinine_micromol_l + diltiazem_mg_day + amiodarone_mg_day, data = ute_data)
-
-a = predict(model)
-b = log(ute_fit$predictions)
-c = log(ute_fit$yobs_ng_ml) 
-
-MLmetrics::R2_Score(a, c)
-MLmetrics::R2_Score(b, c)
-plot(a, b)
-abline(0, 1)
 ```
 
 ```{r}
 
 fit %>% 
-  spread_draws(mu_F, b_F_amio) %>% 
-  crossing(amio_dose = seq(0, 1.0, 0.25)) %>% 
-  mutate(effective_dose = 5.0*plogis(mu_F + amio_dose*b_F_amio),
-        dose_label = factor(str_c(400*amio_dose, ' mg/day'))) %>% 
-  
-  select(dose_label, effective_dose) %>% 
-  ggplot(aes(effective_dose, dose_label))+
-  stat_gradientinterval(fill='red')+
-  labs(y='Amiodarone', x='Effective dose of apixaban mg')
-```
-
-
-```{r}
-
-conc = function(time, d, f,cl, ke, ka, c0){
-  d*f*ke*ka/(cl*(ke-ka)) * (exp(-ka*time) - exp(-ke*time)) + c0
-}
-
-preds = fit %>% 
-  spread_draws(u_Cl[i], u_ke[i], u_ka[i], u_F[i], u_C0[i], ndraws = 1000) %>% 
-  left_join(ute_data) %>% 
-  crossing(time = seq(0, 12, 0.5)) %>% 
+  spread_draws(mu_cl, s_cl, mu_tmax, s_t, mu_alpha, s_alpha, mu_F, b_F_amio) %>% 
   mutate(
-    y = conc(time, dose_mg_twice_daily, u_F, u_Cl, u_ke, u_ka, u_C0)
+
+    cl = exp(mu_cl),
+    tmax = exp(mu_tmax),
+    a = plogis(mu_alpha),
+    ka = log(a)/(tmax*(a-1)),
+    ke = ka*a
   ) %>% 
-  ungroup %>% 
-  group_by(i, time) %>% 
-  mean_qi(y)
+  select(cl, tmax, ka, ke, mu_F, b_F_amio) %>%  
+  crossing(amio = seq(0, 1, 0.05)) %>% 
+  mutate(f = plogis(mu_F + b_F_amio*amio),
+         y = conc(tmax, 5, f, cl, ke, ka, 0)) %>% 
+  ggplot(aes(amio, y))+
+  stat_lineribbon(.width = c(0.5, 0.8, 0.95, 0.99), size=0)+
+  scale_fill_brewer(palette ='YlGnBu')
 
-
-file_name = 'figures/conc_by_sex.png'
-preds %>% 
-  left_join(ute_data) %>% 
-  ggplot(aes(time, 1000*y, color=sex, group = i))+
-  geom_line(alpha = 0.5, show.legend = F)+
-  facet_grid(~sex)+
-  theme(aspect.ratio = 0.62)+
-  labs(x='Hours Post Dose', y='Concentration (ng/ml)')
-
-ggsave(file_name)
-knitr::plot_crop(file_name)
 ```
-
-
-```{r}
-
-x = tibble(
-  .var = c('age','amio','creatinine','is','weight'),
-  variable = c('Age','Amiodarone','Creatinine','Is Male', 'Weight')
-)
-
-
-# Clearance
-
-mus = fit %>% 
-      spread_draws(mu_cl) %>% 
-      rename(mu = mu_cl)
-
-cl = fit %>% 
-  spread_draws(`b_cl.*`, regex=T) %>% 
-  mutate(b_cl_Reference=0) %>% 
-  rename(b_cl_male = b_cl_is_male) %>% 
-  pivot_longer(cols=starts_with('b_cl'), names_to='.variable') %>% 
-  left_join(mus) 
-
-#elimination
-
-mus = fit %>% 
-      spread_draws(mu_ke) %>% 
-      rename(mu = mu_ke)
-
-ke = fit %>% 
-  spread_draws(`b_ke.*`, regex=T) %>% 
-  mutate(b_ke_Reference=0) %>% 
-  rename(b_ke_male = b_ke_is_male) %>% 
-  pivot_longer(cols=starts_with('b_ke'), names_to='.variable') %>% 
-  left_join(mus) 
-
-
-# Bio availability
-mus = fit %>% 
-      spread_draws(mu_F) %>% 
-      rename(mu = mu_F)
-
-Fs = fit %>% 
-  spread_draws(`b_F.*`, regex=T) %>% 
-  mutate(b_F_Reference=0) %>% 
-  pivot_longer(cols=starts_with('b_F'), names_to='.variable') %>% 
-  left_join(mus) 
-
-
-
-
-file_name = 'figures/effects.png'
-
-bind_rows(cl, ke, Fs) %>% 
-  separate(.variable, into = c('b','pk','covar')) %>%
-  mutate(covar = if_else(covar=='amio', 'amio (400 mg/day)', covar)) %>% 
-  mutate(
-    estimate = case_when(pk=='F'~plogis(mu + value), T~ exp(value + mu)),
-    covar = str_to_sentence(covar)
-  ) %>% 
-    mutate(covar = factor(covar),
-         covar = relevel(covar, ref='Reference')
-         ) %>% 
-  ggplot(aes(estimate, fct_rev(covar)))+
-  stat_pointinterval()+
-  facet_wrap(~pk, scale = 'free_x')+
-  theme(aspect.ratio = 1)+
-  labs(y='', x='Estimate')
-  
-ggsave(file_name)
-knitr::plot_crop(file_name)
-
-    
-```
-
-
-
-
-
 
 # References
