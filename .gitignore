@@ -4,3 +4,5 @@
 .Ruserdata
 *.RDS
 .ipynb_checkpoints
+*.csv
+
