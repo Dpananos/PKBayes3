@@ -1,6 +1,5 @@
-
 import numpy as np
-
+import random
 from scipy.stats import norm, binom, uniform
 
 
@@ -29,7 +28,7 @@ class BasePatient:
 
 class Patient(BasePatient):
 
-    def __init__(self, subjectid,  sampling=None):
+    def __init__(self, subjectid, sampling=None):
 
         super().__init__()
         # Draw the z score for easier passing to stan
@@ -38,10 +37,16 @@ class Patient(BasePatient):
         self.age = self.draw_covar(0, 1, round_to=1)
         self.weight = self.draw_covar(0, 1, round_to=2)
         self.creatinine = self.draw_covar(0, 1, round_to=2)
-
-        self.is_male = binom(n=1, p=0.5).rvs()
-        self.dose = 2.5 + 2.5*binom(n=1, p = 0.5).rvs()
+        self.is_male = random.choice([0.0, 1.0])
+        self.dose = random.choice([2.5, 5.0])
         self.sampling = sampling
+
+        # Assume much like our real data that our controlled study has no one taking amiodarone,
+        # leaving us to estimate the effect from the sparse data.
+        if self.sampling == 'sparse':
+            self.amio = random.choice([0, 0.25, 0.5, 0.75, 1])
+        else:
+            self.amio = 0
 
     @property
     def covars(self):
@@ -52,7 +57,9 @@ class Patient(BasePatient):
             'weight': self.weight,
             'creatinine': self.creatinine,
             'is_male': self.is_male,
-            'dose': self.dose
+            'dose': self.dose,
+            'amio': self.amio,
+            'sampling': self.sampling
         }
 
         if self.sampling == 'dense':
@@ -61,7 +68,7 @@ class Patient(BasePatient):
             t = np.round(uniform(108, 12).rvs(), 2)
         else:
             raise ValueError('sampling must be "dense" or "sparse".')
-
-        d['time'] = t
         
+        d['time'] = t
+
         return d
