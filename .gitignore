@@ -5,4 +5,4 @@
 *.RDS
 .ipynb_checkpoints
 *.csv
-
+*.DS_Store
