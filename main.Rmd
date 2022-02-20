@@ -60,11 +60,11 @@ Additional research into determining factors which explain this excess variabili
 
 # Variable Importance & Simulation Study
 
-Existing studies often use variable selection methods (e.g. fitting all submodels [*CITE*], or variants of stepwise selection) when faced with the determining which are said to effect the phenomenon under study. Many studies have noted that these techniques result in bias away from the null, narrow confidence intervals, inaccurate or uninterpretable p values due to inability to properly incorporate uncertainty in the selection process, and under mild assumptions can fail to select the "true" model with high confidence [*CITE MANY PAPERS*].  Results from simulation studies on selection methods make a convincing argument to avoid selection methods. 
+Existing studies often use variable selection methods (e.g. variants of stepwise selection, including fitting all submodels [*CITE*]) when faced with the determining which are said to effect the phenomenon under study. Many studies have noted that these techniques result in bias away from the null, exaggerated precision, inaccurate or uninterpretable p values due to inability to properly incorporate uncertainty in the selection process, and under mild assumptions can fail to select the "true" model with high confidence [*CITE MANY PAPERS*].  Results from simulation studies on selection methods make a convincing argument to avoid selection methods. 
 
-Selection methods are intended to answer the question "which variables are important", and although simulation studies have demonstrated selection methods deficiencies, they often do not answer this question.  From a Bayesian perspective, selection to include a variable in or out of a model defines a sort of prior on the parameter value; there is a strong preference for no effect unless the data provide sufficient evidence for free estimation of that effect.  Efforts to operationalize this prior structure in terms of Bayesian inference have lead to a wide variety of sparsity inducing priors, which include: spike and slab priors [*CITE*], and horseshoe and finish horseshoe priors [*CITE*]. These approaches admit that while unlikely that effects of variables are exactly 0, they may be too small to care about.  These priors place the majority of their probability mass near 0, enouraging small effects to be estimated as something negligibly small, but allow for large effects to be identified (with perhaps a small amount of bias depending on the prior hyperparameters and prior structure).
+Selection methods are intended to answer the question "which variables are important", and although simulation studies have demonstrated deficiencies with variable selection, they often do not answer the intended question.  From a Bayesian perspective, selection to include a variable in or out of a model defines a sort of prior on the parameter value; there is a strong preference for no effect unless the data provide sufficient evidence for free estimation of that effect.  Efforts to operationalize this prior structure in terms of Bayesian inference have lead to a wide variety of sparsity inducing priors, which include: spike and slab priors [*CITE*], and horseshoe and finish horseshoe priors [*CITE*]. These approaches admit that while unlikely that effects of variables are exactly 0, they may be too small to care about.  These priors place the majority of their probability mass near 0, enouraging small effects to be estimated as something negligibly small, but allow for large effects to be identified (with perhaps a small amount of bias depending on the prior hyperparameters and prior structure).
 
-Bias towards a null effect  can be acceptable when the goal is exploration and prediction.  The bias can act as a regularization for predictions hence combating overfitting, and can hedge estimates of novel effects combating erronous discoveries due to sampling variation.  In our perspective, discovery is not about getting the estimate right the first time, its about making progress and identifying directions for further investigation.  Bias in the estimates from sparsity inducing priors achieves puts investigators on that path.
+Bias towards a null effect  can be acceptable when the goal is exploration and prediction.  The bias can act as a regularization for predictions hence combating overfitting, and can hedge estimates of novel effects when they are exagerated due to high variance.  In our perspective, discovery is not about getting the estimate right the first time, its about making progress and identifying directions for further investigation.  Bias in the estimates from sparsity inducing priors achieves puts investigators on that path.
 
 To this end, we present a simulation study in which we use a sparsity inducing prior to estimate the effect of a concomitant medication on apixaban pharmacokinetics.  In particular, the medication is assumed to inhibit a particular gene important in the elimination of apixaban, making the bioavailability larger.  We place a double exponential (or Laplace) prior on the effect of the concomitant medicaion, as well as a prior on the parameter for the Laplace distirbution.  This is similar to putting a LASSO penalty on the effect as well as a prior on the LASSO penalty strength [*CITE?*].  Although our simulation only has a single variable of interest, many variables can be used with this prior structure.
 
@@ -151,19 +151,32 @@ Note the likelihood for dataset 2 has a different observational noise component 
 
 The results from our simulation study are shown below. The precision of the estimate of effect of concimitant drug use increases as the number of densley sampled (and sparsely sampled) patientcs increases.  Show in read are the sample means of the 10 runs (black dots).  On average we see a small amount of bias in the estimates.  This is expected since the sparsity inducing priors have the majority of their density in a small neighbourhood of 0, regularizing effects towards 0.  For purposes of discovery, these biases may be acceptable.
 
+
+When using real data, our model can accurately predict both densley sampled and sparsley sampled data.  Shown in figure x is a log-log plot of predicted and actual concentrations for both datasets.  The model makes more accurate predictions for densley sampled patients (because it is able to estimate the random effect in each pharmacokinetic parameter).  The apparent increase in prediction error for the sparsley sampled can be explained by the absence of random effects for each patient.  The within and between patient variation manfiests as measurement error solely, thus leading to lower predictive ability.  This perspective is suppported when examining the measurement error posterior distirbutions for both dense/sparse patients.
+
+With a model for the pharmacokinetics of apixaban in hand, estimates of salient pharmacokientic phenomena can be easily obtained.  In figure y, we use our model to estimate the max concentration for the reference patient under different doses of amiodarone.  Through our model, we estimate concomitant amiodarone increases bioavailability, which in turn increases max concentration.  Shown in black is the expected max concentration conditioned on concomitant amiodarone dose, as well as 95% equal tailed posterior credible intervals.
+
 ```{r}
 sim_results<-list.files('python/simulation_data/', full.names = T) %>% 
              map_dfr(read_csv)
 
-sim_results %>% 
-  rename(estimate=mean) %>% 
-  ggplot(aes(amio_effect, plogis(estimate) - plogis(amio_effect)))+
-  geom_hline(aes(yintercept=0), color = 'dark grey')+
+sim_results %>%
+  rename(estimate=mean) %>%
+  ggplot(aes(amio_effect, estimate))+
+  geom_abline(color = 'dark grey')+
   geom_point(alpha = 0.5)+
+  # geom_pointrange(aes(ymin = `2.5%`, ymax = `97.5%`), alpha = 0.5, fill = 'gray', color = 'black', position = position_dodge2(width = 0.25))+
   stat_summary(color='red', geom='line')+
   facet_wrap(~num_dense_patients)+
   labs(x='True Bioavailability', y = 'Error')
-  
+
+
+# sim_results %>% 
+#   rename(estimate=mean) %>% 
+#   ggplot(aes(factor(amio_effect), estimate))+
+#   geom_pointrange(aes(ymin = `2.5%`, ymax = `97.5%`), alpha = 0.5, fill = 'gray', color = 'black', position = position_dodge2(width = 0.5))+
+#   geom_point(aes(factor(amio_effect), amio_effect), color = 'red')+
+#   facet_wrap(~num_dense_patients)
 ```
 
 
@@ -248,11 +261,21 @@ fit %>%
   mutate(f = plogis(mu_F + b_F_amio*amio),
          y = conc(tmax, 5, f, cl, ke, ka, 0)) %>% 
   ggplot(aes(amio, y))+
-  stat_lineribbon(.width = c(0.5, 0.8, 0.95, 0.99), size=0)+
+  stat_lineribbon(.width = c(0.5, 0.8, 0.95, 0.99), size=1)+
   scale_fill_brewer(palette ='YlGnBu')+
   scale_x_continuous(labels = function(x) 400*x)
 
 ```
+
+# Discussion
+
+In cases like apixaban, where real world data indicates previously published models may underestimate some aspect of pharmacokientics important to personalzing doses, investigators may consider constructing their own model for use in personalization as well as in exploration for novel effects.  In such cases making use of all available data, be the data from densley sampled highly controled studies or routinely collected samples from a personalized medicine clinic, is vital when running a large scale study is infeasible. In addition to tailoring the model to the population of interest, investigators may also be interested in examingin effects of covariates not previously studied.  These models hence play two roles: prediction and exploration.
+
+Investigators may also be interested in detecting novel effects of new covariates (e.g. concomitant medications) not previously studied in clinical trials.  Where as previous studies use variable selection, we propose using sparse priors to detect large effects at the cost of bias in those effects towards the null.  In our simulation, we are able to detect both small and large at the expense of bias in the estimate.  This bias attenuates as sample size increases, as expected.  From the perspective of exploration, the bias is acceptable for two reasons.  First, no single study is intended to be an *experimentum crucis*.  Exploratory studies are, from our perspective, intended to generate hypotheses to be further examined in subsequent studies and populations. In these cases, the more salient factors are the magnitude of the estimate (is the effect "big" or "small", for some definition of those) and the sign of the effect (does the new covariate increase or decrease some quantity).  
+
+
+
+
 
 
 
