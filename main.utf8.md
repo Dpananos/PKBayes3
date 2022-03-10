@@ -5,38 +5,14 @@ author:
   - "Daniel J. Lizotte"
   - "Simon J. Bonner"
 output: pdf_document
-date: "`r format(Sys.time(), '%B %d, %Y')`"
+date: "March 10, 2022"
 bibliography: references.bib  
 ---
 
 
-```{r global-options, include=FALSE, message=FALSE, warning=FALSE}
-knitr::opts_chunk$set(
-  echo = F,
-  message = F,
-  warning = F,
-  fig.height = 4,
-  fig.align = 'center',
-  dpi = 400,
-  cache = F
-)
-```
 
-```{r libraries}
-library(tidyverse)
-library(rstanarm)
-library(tidybayes)
-library(cmdstanr)
-library(duckdb)
-library(DBI)
-source('R/utils.R')
 
-options(readr.show_progress=F,
-        readr.num_columns = 0)
 
-theme_set(theme_light())
-cmdstanr::register_knitr_engine(override = F)
-```
 
 
 # Introduction
@@ -188,116 +164,24 @@ When using real data, our model can accurately predict both densely sampled and 
 
 With a model for the pharmacokinetics of apixaban in hand, estimates of salient pharmacokinetic phenomena can be easily obtained.  In figure y, we use our model to estimate the max concentration for the reference patient under different doses of amiodarone.  Through our model, we estimate concomitant amiodarone increases bioavailability, which in turn increases max concentration.  Shown in black is the expected max concentration conditioned on concomitant amiodarone dose, as well as 95% equal tailed posterior credible intervals.
 
-```{r}
-sim_results<-list.files('python/simulation_data/', full.names = T) %>% 
-             map_dfr(read_csv)
 
-sim_results %>%
-  rename(estimate=mean) %>%
-  ggplot(aes(amio_effect, estimate))+
-  geom_abline(color = 'dark grey')+
-  geom_point(alpha = 0.5)+
-  # geom_pointrange(aes(ymin = `2.5%`, ymax = `97.5%`), alpha = 0.5, fill = 'gray', color = 'black', position = position_dodge2(width = 0.25))+
-  stat_summary(color='red', geom='line')+
-  facet_wrap(~num_dense_patients)+
-  labs(x='True Bioavailability', y = 'Error')
+\begin{center}\includegraphics{main_files/figure-latex/unnamed-chunk-1-1} \end{center}
 
 
-# sim_results %>% 
-#   rename(estimate=mean) %>% 
-#   ggplot(aes(factor(amio_effect), estimate))+
-#   geom_pointrange(aes(ymin = `2.5%`, ymax = `97.5%`), alpha = 0.5, fill = 'gray', color = 'black', position = position_dodge2(width = 0.5))+
-#   geom_point(aes(factor(amio_effect), amio_effect), color = 'red')+
-#   facet_wrap(~num_dense_patients)
+
+
+
+
+
+
+\begin{center}\includegraphics{main_files/figure-latex/plot-model-predictions-1} \end{center}
+
+```
+## [1] "figures/prediction_v_actual.png"
 ```
 
 
-```{r load-in-data}
-con = dbConnect(duckdb(),'data/database/apixaban_data.duckdb')
-
-ute_data = tbl(con, 'ute_cleaned_data') %>% 
-           collect() %>% 
-           mutate(
-             dataset = "Ute's Data",
-             i = seq_along(subjectids)
-           ) 
-
-rommel_data = tbl(con, 'rommel_cleaned_data') %>% 
-              collect() %>% 
-              mutate(
-                subjectids = as.character(subjectids),
-                dataset = "Rommel's Data"
-                )
-
-dbDisconnect(con, shutdown=T)
-
-
-```
-
-```{r load-in-model}
-fit = readRDS('model_008.RDS')
-
-conc = function(time, d, f,cl, ke, ka, c0){
-  d*f*ke*ka/(cl*(ke-ka)) * (exp(-ka*time) - exp(-ke*time)) + c0
-}
-
-```
-
-
-```{r plot-model-predictions}
-
-# Check for data from one of those data.
-# Public apixaban data?
-rommel_fit = fit %>% 
-  spread_draws(r_C[i]) %>% 
-  mutate(r_C = 1000*r_C) %>% 
-  mean_qi() %>% 
-  bind_cols(rommel_data) %>% 
-  rename(predictions=r_C)
-
-
-ute_fit = fit %>% 
-  spread_draws(u_C[i]) %>% 
-  mutate(u_C = 1000*u_C) %>% 
-  mean_qi() %>% 
-  bind_cols(ute_data) %>% 
-  rename(predictions=u_C)
-
-rommel_fit %>% 
-  bind_rows(ute_fit) %>% 
-  ggplot(aes(log(yobs_ng_ml), log(predictions), ymin = log(.lower), ymax = log(.upper)))+
-  geom_pointrange(size=0.1)+
-  geom_abline(color='dark grey')+
-  facet_wrap(~dataset, scale='free')+
-  theme(aspect.ratio = 0.62)+
-  labs(x='Log Concentration', y='Log Prediction')
-
-ggsave('prediction_v_actual.png', path='figures')
-knitr::plot_crop('figures/prediction_v_actual.png')
-
-```
-
-```{r}
-
-fit %>% 
-  spread_draws(mu_cl, s_cl, mu_tmax, s_t, mu_alpha, s_alpha, mu_F, b_F_amio) %>% 
-  mutate(
-    cl = exp(mu_cl),
-    tmax = exp(mu_tmax),
-    a = plogis(mu_alpha),
-    ka = log(a)/(tmax*(a-1)),
-    ke = ka*a
-  ) %>% 
-  select(cl, tmax, ka, ke, mu_F, b_F_amio) %>%  
-  crossing(amio = seq(0, 1, 0.05)) %>% 
-  mutate(f = plogis(mu_F + b_F_amio*amio),
-         y = conc(tmax, 5, f, cl, ke, ka, 0)) %>% 
-  ggplot(aes(amio, y))+
-  stat_lineribbon(.width = c(0.5, 0.8, 0.95), size=1)+
-  scale_fill_brewer(palette ='YlGnBu')+
-  scale_x_continuous(labels = function(x) 400*x)
-
-```
+\begin{center}\includegraphics{main_files/figure-latex/unnamed-chunk-2-1} \end{center}
 
 
 # References
