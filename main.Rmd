@@ -4,7 +4,10 @@ author:
   - "A. Demetri Pananos"
   - "Daniel J. Lizotte"
   - "Simon J. Bonner"
-output: pdf_document
+output: 
+  pdf_document:
+    includes:
+      in_header: "preamble.tex"
 date: "`r format(Sys.time(), '%B %d, %Y')`"
 bibliography: references.bib  
 ---
@@ -178,6 +181,40 @@ and we assume a lognormal likelihood
 
 $$ y_j \sim \mbox{Lognormal}(C(t), \sigma_2) \>. $$
 Note the likelihood for dataset 2 has a different observational noise component ($\sigma_2$) as compared to dataset 1 ($\sigma_1$).  This is because random effects can not be estimated from dataset 2, hence the residual variance is part observational noise and part between subject variability conditional on the subject covariates.
+
+
+
+\begin{figure}[t!]
+	
+\centering
+\begin{tikzpicture}
+	
+\node[latent](b){$\beta$};
+\node[latent, right=of b](mu){$\mu$};
+
+\node[latent, below = of b](theta){$\theta$};
+\node[obs, left = of theta](x){$\mathbf{X}$};
+
+
+\node[latent, below = of theta](C){$C(t)$};
+\node[obs, left = of C](t){$t$};
+\node[obs, below = of C](y){$y$};
+\node[latent, left = of y, xshift=-2cm](s){$\sigma$};
+
+\edge{b}{theta};
+\edge{mu}{theta};
+\edge{x}{theta};
+\edge{theta}{C};
+\edge{t}{C};
+\edge{C}{y};
+\edge{s}{y};
+
+\plate[]{t_y_pairs}{(t)(y)(C)}{$i=1 \dots T_j$};
+\plate[]{subjects}{(t_y_pairs)(x)(theta)}{$j=1 \dots N_s$};
+\plate[]{study}{(subjects)(s)}{$s=1 \dots K$};
+\end{tikzpicture}
+\end{figure}
+
 
 # Results
 
