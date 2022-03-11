@@ -115,72 +115,28 @@ Our model specifies a population level effect of covariates (age, sex, weight (k
 
 We fit our model using Stan [-@gelman2015stan], an open source probabilistic programming language with interfaces to Python, R, Stata, Matlab, and more.  Fitting two datasets jointly is formally equivalent to fitting one dataset first and passing the posterior as a prior for a model for the other dataset.  However, such an approach requires  of the posterior, which may result in loss of information (such as covariance between draws, unless explicitly modeled).  The recommended approach is then to fit datasets jointly, as done in [-@fallingBetancourt].
 
+Let $s = 1 \dots K$ denote the number of studies being pooled together.  Each study has $j = 1 \dots N_s$ subjects, whom are observed at times $t_i$ for $i = 1 \dots T_j$.  For sparsely sampled data, $T_j=1$, meaning we have only one sample per subject.  For densley sampled data, $T_j>1$, meaning we have multiple measurements from the same subject.  In our data, we use $K=2$ studies.  There are $N_1=36$ subjects in our densley sampled data, and $N_2=402$ subjects in our sparsley sampled data.  The densley sampled subjects are each sampled $T=8$ times.
 
+Our model assumes there are population level effects of each covariate on the pharmacokientic parameters, and that the distribution of pharmacokinetic parameters given subject $j$'s covariates $\mathbf{x}_j$ are the same between studies.  Let $\theta_{j, s}$ be a vector of pharmacokinetic parameters for subject $j$ in study $s$.  In our model $\theta_{j,1} = (Cl_j, t_{\max, j}, \alpha_j, F_j)$ is a vector of pharmacokinetic parameters.  Here $Cl$ is the clearance rate, $t_{\max}$ is the time to max concentration, $\alpha = k_e/k_a$ is the ratio between elimination and absorption rates (and is hence unitless), and $F$ is the bioavailability.
 
-### Dense Sampling (Dataset 1) Model
+There are two other parameters which we have excluded from our Bayes net for clarity of exposition.  We estimate a time delay between ingestion of the bolus dose and absorption of the dose for each subject $\delta_j$ for the densely sampled data.  The multiple observations from each subject allow for this estimation, and the delay is not a function of any covariates.  Because the sparsley sampled subjects are assumed to be in steady state, they have an initial non-zero concentration of apixaban in their blood $c_{0, j}$.  We assume subjects have been taking the same dose of apixaban twice daily with perfect adherence.  This assumption allows estimation of the initial concentration as a function of the other pharmacokientic covariates $c_{0, j} = c_{0}(Cl_j, t_{\max, j}, \alpha_j, F_j)$.  We provide an analytic expression for $c_{0}$ by solving the differential equation with forcing functions via the Laplace Transform (see appendix).
 
-Since patients are observed multiple times in these data, this offers the opportunity to estimate random effects for Clearence $Cl$, time to mac concentration $t_{\max}$, ratio between elimination and absorption rates $\alpha = k_e/k_a$.
+Each pharmacokinetic parameter has an associated set of regression coefficients and intercept term.  Subject covariates $\mathbf{x}_{j}$ will effect the clearance rate, time to max concentration, alpha, and bioavailability like
 
-Let $X$ be a matrix of mean centered and standardized covariates for dataset 1.  For patient $j$, we model the pharmacokinetic parameters as
+$$ \log(Cl_{j}) = \mu_{Cl} + \mathbf{x}_j \beta_{Cl} $$
+$$ \log(t_{\max, j}) = \mu_{t} + \mathbf{x}_j \beta_{t} $$
+$$ \operatorname{logit}(\alpha_{j}) = \mu_{\alpha} + \mathbf{x}_j \beta_{\alpha} $$
 
-$$ \log(Cl_{j}) = \mu_{Cl} + X\beta_{Cl} + z_{Cl, j} \sigma_{Cl}  $$
-$$ \log(t_{\max,j}) = \mu_{t_{\max}} + X\beta_{t_{max}} + z_{t_{\max, j}}\sigma_{t_{\max}}  $$
+$$ \operatorname{logit}(F_{j}) = \mu_{F} + \mathbf{x}_j \beta_{F} $$
 
-$$ \operatorname{logit}(\alpha_{j})  =  \mu_{\alpha} + X\beta_{\alpha} + z_{\alpha, j}\sigma_{\alpha}  $$
+Where the $\beta$ are regression coefficients and $\mu$ are intercepts for the parameter indicated in the subscript. We include random effects for densley sampled subejcts. Each $\theta_{j, s}$ is used to predict the concentration profile $C(t)$.  We use a one compartment pharmacokinetic model with linear elimination as our $C(t)$, namely
 
-Here, the $\mu$ are the population level means for the indicated pharmacokinetic parameters, the $\beta$ are the regression coefficients, the $z$ are standard normal random variables to account for random effects, and the $\sigma$ are the standard deviations of the population distribution for the indicated pharmacokinetic parameters. Additionally, we model the population mean for the bioavailability as $F = 1/(1 + e^{\mu_F}$, with a prior on $\mu_F$.  Both the $\mu$ and the $\beta$ are shared between datasets.
+$$ C_{j, s}(t_i) =  \begin{cases} c_{0, j, s} + \dfrac{D_j F_j k_{e, j} k_{a, j}}{Cl_{j}(k_{e, j} - k_{a, j})} \Bigg( e^{-k_{a, j}(t_i - \delta_j)} - e^{-k_{e, j}(t_i - \delta_j)} \Bigg)  & \delta_j \leq t_i \\ 0 & \mbox{else} \end{cases}$$
 
-For dataset 1, we also model a delay between ingestion and absorption of apixaban.  The delay is modeled as 
+Again, if $s=1$ (indicating dense sampling) then $c_{0, j, 1} = 0 \forall j$ since patients from this study take apixaban for the first time.  If $s=2$ (indicating sparse sampling) then $\delta_j=0 \forall j$ since the delay can not be estimated from a single observation.  Finally, the predicted latent concentrations are used in the likelihood.  We use a lognormal likelihood for both datasets, with variance differing by study
 
-$$ \delta_j = 0.5 \times b  $$
-
-Where $b$ is a beta distributed random variable with parameters learned from the data.  The factor of 0.5 is used to ensure that at $t=0.5$ hours after ingestion, the predicted to be non-zero.
-
-We use a one compartment pharmacokinetic model with first order elimination as our conditional mean
-
-$$  C_{j}(t)= \begin{cases}\frac{F \cdot D}{C l_j} \frac{k_{e, j} \cdot k_{a, j}}{k_{e, j}-k_{a, j}}\left(e^{-k_{a, j}(t-\delta_j)}-e^{-k_{e, j}(t-\delta_j)}\right) & \delta_j \leq t \\ 0 & \text { else }\end{cases} \>. $$
-Here, all parameters are estimated from data, and we have used the facts that
-
-$$ t_{\max }=\frac{\ln \left(k_{a}\right)-\ln \left(k_{e}\right)}{k_{a}-k_{e}} $$
-$$ \alpha = \dfrac{k_e}{k_a} $$
-
-in order to solve for $k_e$ and $k_a$ for use in our PK model.  Finally, we specify a lognormal likelihood for dataset 1
-
-$$ y_j \sim \mbox{Lognormal}(C_j(t), \sigma_1) \>. $$
-
-For information of prior distributions, see our supplement.
-
-### Real Life Data (Dataset 2) Model
-
-Much of the structure from the previous model is translated to dataset 2.  However, there are a few differences.
-
-Because patients in this dataset are not measured multiple times we do not estimate random effects or a time delay.  Hence, we model
-
-$$ \log(Cl) = \mu_{Cl} + X\beta_{Cl} $$
-
-$$ \log(t_{\max}) = \mu_{t_{\max}} + X\beta_{t_{\max}} $$
-
-$$\operatorname{logit}(a) = \mu_\alpha + X\beta_{\alpha} $$
-
-Where the $mu$ and the $\beta$ are shared between datasets.  Additionally, we model the bioavailbility as 
-
-$$ \operatorname{logit}(F) = \mu_F   + \beta_{amio} \mbox{amiodarone}$$
-
-as dataset 2 has information regarding concomitant amiodarone.  The prior for the effect of concomitant amiodarone is a sparsity inducing prior, meaning it encourages negligible effects (near 0) but will allow for large effects to be identified.  The effect of amiodarone is not included in the model for dataset 1 as the inclusion/exclusion criteria specified that subjects were not using CYP3A4 inhibitors.
-
-Finally, data from dataset 2 comes from patients who have been taking apixaban twice daily and are assumed to be at steady state.  Hence, their initial plasma concentration on ingestion is not 0, but can be modeled using the pharmacokientics none the less.  Assuming the patients have been taking apixaban twice a day, 12 hours apart, for the last 5 days, the initial concentration can be shown to be
-
-$$ c_0 = \sum_{j=1}^{10} C(12j) \>. $$
-
-Here, $C(t)$ is the pharmacokintic profile with estimated coefficients for that patient.  See our supplement for a proof of this proposition.
-
-Our pharmacokinetic profile is again provided by a one compartment first order elimination 
-
-$$  C(t)= c_0 + \frac{F \cdot D}{C l} \frac{k_{e} \cdot k_{a}}{k_{e}-k_{a}}\left(e^{-k_{a}(t)}-e^{-k_{e}(t)}\right)  $$
-and we assume a lognormal likelihood
-
-$$ y_j \sim \mbox{Lognormal}(C(t), \sigma_2) \>. $$
-Note the likelihood for dataset 2 has a different observational noise component ($\sigma_2$) as compared to dataset 1 ($\sigma_1$).  This is because random effects can not be estimated from dataset 2, hence the residual variance is part observational noise and part between subject variability conditional on the subject covariates.
+$$ y_{i,j,s} \sim \operatorname{Lognormal}\Big( \log(C_{j, s}(t_i)), \sigma_s \Big)  \>.$$
+We present a fully generative model in the supplement, complete with prior distirbutions for regression coefficients and intercepts.
 
 
 
@@ -193,7 +149,7 @@ Note the likelihood for dataset 2 has a different observational noise component 
 \node[latent, right=of b](mu){$\mu$};
 
 \node[latent, below = of b](theta){$\theta$};
-\node[obs, left = of theta](x){$\mathbf{X}$};
+\node[obs, left = of theta](x){$\mathbf{x}$};
 
 
 \node[latent, below = of theta](C){$C(t)$};
@@ -213,6 +169,7 @@ Note the likelihood for dataset 2 has a different observational noise component 
 \plate[]{subjects}{(t_y_pairs)(x)(theta)}{$j=1 \dots N_s$};
 \plate[]{study}{(subjects)(s)}{$s=1 \dots K$};
 \end{tikzpicture}
+\caption{Bayes net for our heirarchical apixaban pharmacokientics model.  Here, $\beta$ and $\mu$ are understood to be sets of regression coefficients and intercepts for each element of $\theta$.}
 \end{figure}
 
 
