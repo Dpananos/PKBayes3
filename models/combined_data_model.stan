@@ -47,7 +47,6 @@ transformed data{
   
   vector[u_n] u_amiodarone_scaled = u_amiodarone/max(u_amiodarone);
   vector[u_n] u_diltiazem_scaled = u_diltiazem/max(u_diltiazem);
-  vector[24] tpred;
 
 }
 parameters{
