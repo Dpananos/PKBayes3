@@ -51,17 +51,16 @@ transformed data{
 }
 parameters{
   
-  real  mu_cl;
-  
+  real mu_cl;
   real mu_tmax;
+  real mu_alpha;
+  real mu_F;
   
+  real<lower=0> tau_F;
   
   real<lower=0> u_sigma;
   
-  real mu_alpha;
-  
-  real mu_F;
-  
+  real b_F_amio;
   real b_cl_age;
   real b_cl_weight;
   real b_cl_is_male;
@@ -72,40 +71,27 @@ parameters{
   real b_t_is_male;
   real b_t_creatinine;
   
-  // real b_a_age;
-  // real b_a_weight;
-  // real b_a_is_male;
   real b_a_creatinine;
-  
-  real b_F_amio;
-  // real beta_dil;
-  real<lower=0> tau_F;
 }
 transformed parameters{
-  //Rommel's parameters
-
-  //Ute's Parameters
-  vector<lower=0>[u_n] u_Cl = exp(mu_cl + b_cl_age*u_scaled_age + b_cl_weight*u_scaled_weight + b_cl_is_male*u_is_male + b_cl_creatinine*u_scaled_creatinine );
+ vector<lower=0>[u_n] u_Cl = exp(mu_cl + b_cl_age*u_scaled_age + b_cl_weight*u_scaled_weight + b_cl_is_male*u_is_male + b_cl_creatinine*u_scaled_creatinine );
   vector<lower=0>[u_n] u_tmax = exp(mu_tmax + b_t_age*u_scaled_age + b_t_weight*u_scaled_weight + b_t_is_male*u_is_male + b_t_creatinine*u_scaled_creatinine );
   vector<lower=0, upper=1>[u_n] u_alpha = inv_logit(mu_alpha+ b_a_creatinine*u_scaled_creatinine);
   vector<lower=0>[u_n] u_ka = log(u_alpha)./(u_tmax .* (u_alpha-1));
   vector<lower=0>[u_n] u_ke = u_alpha .* u_ka;
   vector<lower=0, upper=1>[u_n] u_F = inv_logit(mu_F + b_F_amio*u_amiodarone_scaled);
   
-  vector<lower=0>[u_n] u_C = rep_vector(0.0, u_n);
-  vector<lower=0>[u_n] u_C0 = rep_vector(0.0, u_n);
+  vector<lower=0>[u_n] C0 = rep_vector(0.0, u_n);
+  vector<lower=0>[u_n] C;
   
-  for(i in 1:14){
-    u_C0 = u_C0 + concentration(rep_vector(12*i, u_n), u_D, u_F, u_Cl, u_ka, u_ke);
+  for(i in 1:5){
+    C0 = C0 + concentration(rep_vector(12*i, u_n), u_D, u_F, u_Cl, u_ka, u_ke);
   }
-  u_C = u_C0 + concentration(u_time, u_D, u_F, u_Cl, u_ka, u_ke);
   
-  
-  
+  C = C0 + concentration(u_time, u_D, u_F, u_Cl, u_ka, u_ke);
 }
 model{
-  //See Byon et. al 2019
-  mu_tmax ~ normal(log(3.3), 0.1);
+mu_tmax ~ normal(log(3.3), 0.1);
   
   mu_cl ~ normal(log(3.3),0.15);
   
@@ -135,9 +121,6 @@ model{
   tau_F ~ normal(0, 0.25);
   
   u_sigma ~ lognormal(log(0.1), 0.2);
-  u_yobs_scaled ~ lognormal(log(u_C), u_sigma);
+  u_yobs_scaled ~ lognormal(log(C), u_sigma);
+  
 }
-generated quantities{
-  real u_yppc[u_n] = lognormal_rng(log(u_C), u_sigma);
-}
-

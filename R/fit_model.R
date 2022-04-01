@@ -85,6 +85,8 @@ u_data = list(
 
 model_data = c(r_data, u_data)
 
+
+
 # Load model  
 if(T){
   
@@ -94,15 +96,15 @@ if(T){
   
   model = cmdstan_model('models/sparse_model.stan')
   fit = model$sample(model_data, chains=4, seed=0, parallel_chains=4)
-  fit$save_object(file='models/sparse_model.stan')
+  fit$save_object(file='sparse_model.RDS')
   
-  model = cmdstan_model('models/combined_data_model_reparam.stan')
+  model = cmdstan_model('models/combined_data_model.stan')
   fit = model$sample(model_data, chains=4, seed=0, parallel_chains=4)
   fit$save_object(file='combined_data_model.RDS')
   
   model = cmdstan_model('models/combined_data_model_reparam.stan')
   fit = model$sample(model_data, chains=4, seed=0, parallel_chains=4)
-  fit$save_object(file='models/combined_data_model_reparam.RDS')
+  fit$save_object(file='combined_data_model_reparam.RDS')
   
 }
 

@@ -63,9 +63,6 @@ parameters{
   // real b_a_is_male;
   real b_a_creatinine;
   
-  real b_F_amio;
-  // real beta_dil;
-  real<lower=0> tau_F;
 }
 transformed parameters{
   //Rommel's parameters
@@ -89,7 +86,6 @@ model{
   s_cl ~ gamma(15,100);
   z_cl ~ std_normal();
   
-  
   mu_alpha ~ normal(-0.25,0.5);
   s_alpha ~ gamma(10, 100);
   z_alpha ~ normal(0,1);
@@ -110,17 +106,9 @@ model{
   b_t_is_male ~ normal(0, 0.25);
   b_t_creatinine ~ normal(0, 0.25);
   
-  // b_a_age ~ normal(0, 0.25);
-  // b_a_weight ~ normal(0, 0.25);
-  // b_a_is_male ~ normal(0, 0.25);
   b_a_creatinine ~ normal(0, 0.25);
   
-  b_F_amio ~ double_exponential(0, tau_F);
-  // beta_dil ~ double_exponential(0, tau_F);
-  tau_F ~ normal(0, 0.25);
-  
   r_sigma ~ lognormal(log(0.1), 0.2);
-  u_sigma ~ lognormal(log(0.1), 0.2);
   r_yobs_scaled ~ lognormal(log(r_C), r_sigma);
 }
 generated quantities{
