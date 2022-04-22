@@ -1,5 +1,5 @@
 ---
-title: "Paper 3"
+title: "Pooling Pharmacokientic Information Using Heirarchical Models"
 author:
   - "A. Demetri Pananos"
   - "Daniel J. Lizotte"
@@ -52,7 +52,7 @@ Independent investigators can find themselves in a situation in which data colle
 
 The oral anti-coagulant apixaban provides an illustrative example.  Pharmacokinetic models have been previously published [-@cirincione2018population;-@ueshima2018population] in collaboration with the drug's manufacturer using data from clinical trials.  These studies identified age, sex, body weight, renal function,  patient race, and CYP3A4 inhibitors as modulators of apixaban pharmacokinetics [-@cirincione2018population], though according to authors the effects of some of these variables were not large enough to require clinical dose adjustment. However, even after adjusting for the aforementioned factors, concentrations of apixaban in real life applications have been observed to be larger than what was reported in clinical trials [-@sukumar2019apixaban], raising questions as to the optimal dosing of apixaban for patients in different settings. Additionally, recent research has indicated appropriateness of dose adjustment criteria are unclear [-@vu2021critical], citing there is no reduction in safety associated with an increased exposure to apixaban in patients above 75 years of age, below 60kg of body weight, and EGFR lower than 50 mL/min. The uncertainty regarding dosing criteria and additional variability in concentrations in day to day use suggests that, while previously published models may be internally valid, these models may not be representative of all populations in which apixaban is to be applied.  That is to say, the models may lack a degree of external validity, thus supporting the idea that pharmacokinetic models may need to be tailored for specific populations of interest. When viewed through a Bayesian lens, the previous modeling work can act as an informative prior on various pharmacokinetic/pharmacodynamic measures.  Creating new models for populations of interest is then more of a "fine tuning" than an all together new approach.  Pharmacokinetic models for use in a specific population may then have two goals:  to adjust doses for a specific population, and/or to explore how additional variables (for example, concomitant medications) not included in the previous studies affect particular parts of the pharmacokinetics of apixaban.  
 
-This study seeks to demonstrate how investigators can fit similar models to their pharmacokinetic data with the aim of accomplishing the goals of accurate modeling of pharmacokientics and exploration of effects of new variables.  We use apixaban as a specific example, but our methodology can be generalized to other drugs for which pharmacokientics are of interest.  Importantly, we only focus on pharmacokientics since blood plasma levels correlate closely with the pharmacodynamic effect of apixaban [-@byon2019apixaban;-@upreti2013effect;-@frost2013safety;-@frost2013apixaban]. Our approach leverages a Bayesian methodology to building pharmacokinetic models so that we may incorporate prior information from previous studies. Additionally, we describe how investigators can use *all* relevant data available to them to fit these models and make inferences, even if the data are not from controlled studies.  Finally, we show how sparsity inducing priors can be applied to new variables in order to explore how those variables may effect apixaban pharmacokinetics, encouraging negligible effect sizes but allowing for large effects to be detected at the cost of a small amount of bias. We present a small simulation study to demonstrate how smallest meaningful effects can be detected through these priors as a function of sample size. Finally, we use an open source Bayesian language to develop our models, making our code freely available.  Previous models are constructed in a proprietary software tool set, which can come at a high cost. Creation of these models in a free tool removes a barrier to research, making these methods more widely available.
+This study seeks to demonstrate how investigators can fit similar models to their pharmacokinetic data with the aim of accomplishing the goals of accurate modeling of pharmacokientics and exploration of effects of new variables.  We use apixaban as a specific example, but our methodology can be generalized to other drugs for which pharmacokientics are of interest.  Importantly, we only focus on pharmacokientics since blood plasma levels correlate closely with the pharmacodynamic effect of apixaban [-@byon2019apixaban;-@upreti2013effect;-@frost2013safety;-@frost2013apixaban]. Our approach leverages a Bayesian methodology to building pharmacokinetic models so that we may incorporate prior information from previous studies. Additionally, we describe how investigators can use *all* relevant data available to them to fit these models and make inferences, even if the data are not from controlled studies.  Also, we show how sparsity inducing priors can be applied to new variables in order to explore how those variables may effect apixaban pharmacokinetics, encouraging negligible effect sizes but allowing for large effects to be detected at the cost of a small amount of bias. We present a small simulation study to demonstrate how smallest meaningful effects can be detected through these priors as a function of sample size. Finally, we use an open source Bayesian language to develop our models, making our code freely available.  Previous models are constructed in a proprietary software tool set, which can present a barrier for some. Creation of these models in a free tool removes a barrier to research, making these methods more widely available.
 
 
 
@@ -163,7 +163,7 @@ $$ y_{i,j,s} \sim \operatorname{Lognormal}\Big( \log(C_{j, s}(t_i)), \sigma_s \B
 
 # Results
 
-```{r load-in-data, caption='Descriptive statistics for repeatedly sampled and sparsely sampled data.  Note, amiodarone is a CYP3A4 inhibitor.  The study which generated repeatedly sampled data excluded any patients whom were taking CYP3A4 inhibitors, so all patients in the repeatedly sampled data are assigned a value of 0 for concomitant amiodarone.'}
+```{r load-in-data}
 con = dbConnect(duckdb(),'data/database/apixaban_data.duckdb')
 
 ute_data = tbl(con, 'ute_cleaned_data') %>% 
@@ -190,6 +190,10 @@ d = bind_rows(rommel_data, ute_data) %>%
            `Creatinine (micromol/L)` = creatinine_micromol_l,
            Sex = sex, 
            `Concomitant Amiodrone (mg/day)` = amiodarone_mg_day)
+```
+
+
+```{r table-1, caption='Descriptive statistics for repeatedly sampled and sparsely sampled data.  Note, amiodarone is a CYP3A4 inhibitor.  The study which generated repeatedly sampled data excluded any patients whom were taking CYP3A4 inhibitors, so all patients in the repeatedly sampled data are assigned a value of 0 for concomitant amiodarone.'}
 
 table1::table1(~Age + `Weight (kg)` + `Creatinine (micromol/L)` + Sex + `Concomitant Amiodrone (mg/day)`| dataset, data = d) %>% 
   t1kable(booktabs=T)
@@ -197,36 +201,57 @@ table1::table1(~Age + `Weight (kg)` + `Creatinine (micromol/L)` + Sex + `Concomi
 
 ```
 
-The results from our simulation study are shown below. The precision of the estimate of effect of concomitant drug use increases as the number of repeatedly sampled (and sparsely sampled) patients increases.  Shown in red are the sample means of the 10 runs (black dots).  On average we see a small amount of bias in the estimates.  This is expected since the sparsity inducing priors have the majority of their density in a small neighborhood of 0, regularizing effects towards 0.  For purposes of discovery, these biases may be acceptable if the result is a decrease in model variability.
+The results from our simulation study are shown in figure \ref{fig:simulation-results}. The precision of the estimate of effect of concomitant drug use increases as the number of repeatedly sampled (and sparsely sampled) patients increases.  Shown in red are the sample means of the 10 runs (black dots).  On average we see a small amount of bias in the estimates.  This is expected since the sparsity inducing priors have the majority of their density in a small neighborhood of 0, regularizing effects towards 0.  For purposes of discovery, these biases may be acceptable if the result is a decrease in model variability.
 
 
-When using real data, our model can accurately predict both repeatedly sampled and sparsely sampled data.  Shown in figure x is a log-log plot of predicted and actual concentrations for both datasets.  The model makes more accurate predictions for repeatedly sampled patients (because it is able to estimate the random effect in each pharmacokinetic parameter).  The apparent increase in prediction error for the sparsely sampled can be explained by the absence of random effects for each patient.  The within and between patient variation manifests as measurement error solely, thus leading to lower predictive ability.
+When using real data, our model can accurately predict both repeatedly sampled and sparsely sampled data.  Shown in figure \ref{fig:plot-model-predictions} is a log-log plot of predicted and actual concentrations for both datasets.  The model makes more accurate predictions for repeatedly sampled patients (because it is able to estimate the random effect in each pharmacokinetic parameter).  The apparent increase in prediction error for the sparsely sampled can be explained by the absence of random effects for each patient.  The within and between patient variation manifests as measurement error solely, thus leading to lower predictive ability.
 
-With a model for the pharmacokinetics of apixaban in hand, estimates of salient pharmacokinetic phenomena can be easily obtained.  In figure y, we use our model to estimate the max concentration for the reference patient under different doses of amiodarone.  Through our model, we estimate concomitant amiodarone increases bioavailability, which in turn increases max concentration.  Shown in black is the expected max concentration conditioned on concomitant amiodarone dose, as well as 95% equal tailed posterior credible intervals.
+With a model for the pharmacokinetics of apixaban in hand, estimates of salient pharmacokinetic phenomena can be easily obtained.  In figure \ref{fig:max-concentration}, we use our model to estimate the max concentration for the reference patient under different doses of amiodarone.  Through our model, we estimate concomitant amiodarone increases bioavailability, which in turn increases max concentration.  Shown in black is the expected max concentration conditioned on concomitant amiodarone dose, as well as 95% equal tailed posterior credible intervals.
 
-Additionally, we contrast the pooled model's estimates of covariate effects with estimates from model's fit to either the sparse or repeatedly sampled data. Marginal posterior densities for the effects of covariates on the pharmacokientic parameters are shown in figure z.  In most cases, the effects seem to have higher precision due to the increase in sample size, and generally there is no large disagreement in either sign or magnitude of effect estimates.  
+Additionally, we contrast the pooled model's estimates of covariate effects with estimates from model's fit to either the sparse or repeatedly sampled data. Marginal posterior densities for the effects of covariates on the pharmacokientic parameters are shown in figure \ref{fig:effect-estimates}.  In most cases, the effects seem to have higher precision due to the increase in sample size, and generally there is no large disagreement in either sign or magnitude of effect estimates.  
 
-```{r}
+
+# Discussion
+
+The Bayesian model we present pools information across studies which may differ in study protocol.  Doing so allows investigators to make use of all available data -- be they from controlled studies, or arising from day to day patient interactions in a personalized medicine clinic -- to fine tune pharmacokinetic models to populations of interest. However, this is just one possible model out of a family of similar models. One extension worth mentioning is estimating heterogeneity of effects between studies.  Our model assumes that for a given covariate, the effect is the same in different studies; the effect of weight on the clearance rate is the same across studies, for example.  This need not be assumed, and it may be the case that allowing for heterogeneity of effects between study populations may help explain additional variation beyond what measured covariates already explain.  The extension to include heterogeneity of effect is straight forward for our model.  In our Bayes net, we would add an additional plate enclosing the first three plates as well as $\beta$ and the $\mu$, and add nodes for population parameters leading into $\beta$ and $\mu$.  We choose not to implement this extension because our data consists of only two studies, making inference on the between study variability in effects difficult to estimate reliably.
+
+To demonstrate how our model can be used to discover novel predictors of pharmacokientics, we included a simulation study in which we place a double exponential prior on a potentially novel covariate's effect on the bioavalability of the drug.  The double exponential prior acts as a sparsity inducing prior, pulling large effects towards 0 as the LASSO does. Our simulation study showed that our model is able to estimate the effect of this novel covariate reliably, even in circumstances where only a small amount of data on repeatedly sampled patients are available to investigators.  The estimates are biased towards the null due to the sparsity inducing prior. This bias attenuates with more data becoming available, and can also change depending on prior hyperparameters. From an estimation perspective, although the estimates of the effects are biased, they may be better suited to predict population effects due to this decrease in variability, similar to the phenomenon displayed by the James-Stein estimator.  We believe that since the goal of exploration is not to get the estimate right the first time, but to rather to discover new avenues for future research, therefore the exchange of variance for bias is not only acceptable but also preferable.
+
+Finally, we applied our model in a case study of apixaban.  We pooled data from two sources; one from a well controlled clinical study, and the other from an observational setting.  We used a sparsity inducing prior to regularize estimates of the effect of concomitant amiodarone on bioavailability of apixaban.  Concomitant amiodarone's effect on apixaban concentration has been previously studied [-@gulilat2020drug], however that model is more descriptive whereas our model is mechanistic (in so far as we model the pharmacokientics explicitly) and incorporates prior information from previous studies.  The findings in our case study and previous work agree; concomitant amiodarone is associated with an increase in apixaban concentrations. It is difficult to evaluate if the magnitudes are similar however, mainly because our model posits a multiplicative effect whereas previous models assume an additive effect.  However, our model is capable of providing richer inferences due to the mechanistic approach and fully Bayesian analysis.  We can propagate uncertainty in the effect of concomitant amiodarone through to other salient pharmacokinetic measures, like max concentration (see figure y).  Additionally, uncertainty in other pharmacokinetic measures can be propagated. For example, where as previous models relied on a point estimate of time to max concentration -- which was the same for each subject -- our model can estimate each patient's time to max concentration (conditioned on covariates) and uncertainty in that estimate propagates through to max concentration.  The posterior distribution of max concentration then captures all uncertainty relevant to the decision, meaning credible intervals should -- at least in theory -- also have better coverage for individuals.  Though a similar Bayesian pharmacokinetic model could be fit using only the sparsely sampled data, pooling information using repeatedly sampled data should be beneficial because of the high precision in estimates of covariate effects afforded by the repeated sampling.
+
+The marginal posterior distributions of the effects display behavior consistent with partially pooled models.  Models fit to each dataset could be considered as a non-pooled estimate, where as our model -- which combines information from multiple datasets -- can be considered as a pooled estimate.  Partially pooled models have the effect of regularizing estimates towards the population mean, but the size of this regularization depends on the precision and magnitude of the estimate. This behavior is most clearly shown in the radon example provided in chapter 12 of Gelman and Hill's book on multilevel modelling[-@gelman2006data]. Those counties with large effects and high precision see little regularization when comparing non-pooled estimates to pooled estimates.  Those counties with large effects and small precision see a strong amount of regularization (see figure 12.1 in  Gelman and Hill [-@gelman2006data]). Similar explanations can be applied to our model.  As an example, we see that the effect of weight on clearance ($Cl$ in our model) has been regularized to be a compromise of the estimates obtained from models fit on the repeatedly and sparsely sampled data separately.  Additionally, we can see that there is little regularization in effects where one dataset provides a high precision estimate (as in creatinine's effect on clearance). The tendency for partially pooled models to regularize towards the population mean has the effect of trading variance for bias, a theme that has permeated this work.  This should in principle result in estimates of the effects with smaller root mean squared error.
+
+Our study is not without limitations.  Firstly, our repeatedly sampled data come from a study concerning patients with Non-Alcoholic Fatty Liver Disease (NAFLD).  Some patients in this study had NAFLD, others did not.  Our sparsely sampled data did not collect this variable, and so technically it should be considered missing.  One strategy is to impute this variable, be it though Frequentist methods or Bayesian methods.  We choose not to impute this and simply exclude it from our model since the study which generated the repeatedly sampled data failed to detect a statistically significant effect of NAFLD on apixaban pharmacokinetics [-@tirona2018apixaban]. Additionally, because patients in the sparsely sampled data were sampled only once, we were forced to assume their time delay was 0.  The time delay is most probably non-zero, and making this assumption may bias estimates of other pharmacokientic measures.  Finally, the subjects in each study are quite different with subjects in the repeatedly sampled data being younger, healthier, and with better kidney function on average. Since subjects in the sparsely sampled data are generally different, a linear effect of covariates on pharmacokientic parameters may not be appropriate due to extrapolation.  A possible remedy for this would be to model the effects of covariates using splines or other suitably flexible methods.  If additional subject matter expertise is available, investigators may choose to model the effects with monotone-splines.  We believe specifications about the functional form of effects are best done with the aid of subject matter experts (pharmacologists, physicians, etc) and opt for the simplest non-trivial functional form for our effects.
+
+# Conclusion
+
+In this study, we demonstrated how investigators could accomplish the goals of accurate modelling of pharmacokientics and exploration of new variables via the use of a heirarchical Bayesian model of pharmacokientics. The model pools information from multiple studies and shrinks estimates of effects.  The result is a trade off of variance for bias, which should improve predictive accuracy.  Additioanlly, we peformed a simulation stduy to demonstrate how sparisty inducing priors can be used to indentify effects of new variables.  We showed that, even in small samples, a small amount of bias is observed in estimates of novel effects and this bias attenuates with more data. Future research may include modelling heterogeneity of effect by adding another level to the heirarhcy.
+
+\newpage
+# Figures
+
+
+```{r simulation-results, fig.cap = 'Results from our simulation study.  Black dots represent the estimated effect of a novel predictor.  Red dots indicate the average estimate across the 10 repititions. Data are faceted by the number of repeatedly sampled patients.  Smaller datasets show more bias towards the null.  This bias attenuates as sample size increases.' }
 sim_results<-list.files('python/simulation_data/', full.names = T) %>% 
-             map_dfr(read_csv)
+             map_dfr(read_csv) %>% 
+             mutate(dense_label = str_c('N repeatedly sampled = ', num_dense_patients))
+
+
+dense_patients = c(5, 10, 20, 30, 40, 50)
+facet_labs = str_c('N repeatedly sampled = ', dense_patients)
+names(facet_labs) = dense_patients
+
 
 sim_results %>%
   rename(estimate=mean) %>%
   ggplot(aes(amio_effect, estimate))+
   geom_abline(color = 'dark grey')+
   geom_point(alpha = 0.5)+
-  # geom_pointrange(aes(ymin = `2.5%`, ymax = `97.5%`), alpha = 0.5, fill = 'gray', color = 'black', position = position_dodge2(width = 0.25))+
-  stat_summary(color='red', geom='line')+
-  facet_wrap(~num_dense_patients)+
-  labs(x='True Effect', y = 'Error')
+  stat_summary(geom='point', color = 'red')+
+  facet_wrap(~num_dense_patients, labeller = as_labeller(facet_labs))+
+  labs(x='True Effect (Logit Scale)', y = 'Estimated Effect')
 
 
-# sim_results %>% 
-#   rename(estimate=mean) %>% 
-#   ggplot(aes(factor(amio_effect), estimate))+
-#   geom_pointrange(aes(ymin = `2.5%`, ymax = `97.5%`), alpha = 0.5, fill = 'gray', color = 'black', position = position_dodge2(width = 0.5))+
-#   geom_point(aes(factor(amio_effect), amio_effect), color = 'red')+
-#   facet_wrap(~num_dense_patients)
 ```
 
 
@@ -242,7 +267,7 @@ conc = function(time, d, f,cl, ke, ka, c0){
 ```
 
 
-```{r plot-model-predictions}
+```{r plot-model-predictions, fig.cap = 'Predicted vs observed concentrations for both datasets on the log scale. Note each plot has a seperate scale. Sparsely sampled data can not be predicted as accurately as the repeatedly sampled data, due in part to the inability to estimate patient random effects in pharmacokinetic parameters.  This additional variance left unexplained manifests as measurement error.'}
 
 # Check for data from one of those data.
 # Public apixaban data?
@@ -272,7 +297,7 @@ rommel_fit %>%
 
 ```
 
-```{r}
+```{r max-concentration, fig.cap='Estimated max concentration as a function of concomitant amiodarone for a reference patient.  Concomitant amiodarone is estimated to increase apixaban bioavailability, thus leading to an increase in max concentration. The uncertainty in the effect of concomitant amiodarone is propogated through to the estimate of max concentration.  If max concentration is a key quqntity in deicion making, propogation of this uncertainty is crucial.'}
 
 fit %>% 
   spread_draws(mu_cl, s_cl, mu_tmax, s_t, mu_alpha, s_alpha, mu_F, b_F_amio) %>% 
@@ -290,11 +315,15 @@ fit %>%
   ggplot(aes(amio, y))+
   stat_lineribbon(.width = c(0.5, 0.8, 0.95), size=1)+
   scale_fill_brewer(palette ='YlGnBu')+
-  scale_x_continuous(labels = function(x) 400*x)
+  scale_x_continuous(labels = function(x) str_c(400*x, ' mg'))+
+  scale_y_continuous(labels = function(x) 1000*x)+
+  labs(x='Concomitant Amiodarone',
+       y = 'Apixaban concentration (ng/ml)',
+       fill = 'Credible level')
 
 ```
 
-```{r}
+```{r effect-estimates, fig.cap='Estimated covariate effects from models fit to each dataset seperately and the pooled model.', fig.height=6}
 dense_fit = readRDS('dense_model.RDS')
 sparse_fit = readRDS('sparse_model.RDS')
 
@@ -309,18 +338,28 @@ model_names = c('Repeatedly Sampled','Sparsely Sampeld','Pooled')
 
 b = map2_dfr(models, model_names, extract_coefs)
 
+covar_pkvar_names = tribble(~pkp, ~pk_var,
+                            'a', 'alpha',
+                            't', 't[max]',
+                            'F', 'F',
+                            'cl', 'Cl')
+
 b %>% 
   filter(grepl('b', .variable)) %>% 
   mutate(.variable = str_replace(.variable, 'is_male', 'sex')) %>% 
   separate(.variable, c('b','pkp','covar')) %>% 
+  left_join(covar_pkvar_names) %>% 
+  mutate(covar = str_to_title(covar)) %>% 
   ggplot(aes(.value, fill = model))+
   geom_density(alpha=0.5, position = 'identity', color = 'black')+
-  facet_wrap(~pkp+covar, scale = 'free')+
-  labs(fill='')
+  facet_wrap(~pk_var+covar, scale = 'free', labeller = label_parsed)+
+  labs(fill='', x = 'Estimate', y = '')+
+  theme(legend.position = 'top')+
+  scale_y_continuous(labels = c())
 
 ```
 
-```{r}
+```{r, include=F}
 d %>% 
   select(Age, `Weight (kg)`, `Creatinine (micromol/L)`, dataset) %>% 
   pivot_longer(cols=c('Age','Weight (kg)', 'Creatinine (micromol/L)')) %>% 
@@ -331,20 +370,7 @@ d %>%
 ```
 
 
-
-# Discussion
-
-The Bayesian model we present pools information across studies which may differ in study protocol.  Doing so allows investigators to make use of all available data -- be they from controlled studies, or arising from day to day patient interactions in a personalized medicine clinic -- to fine tune pharmacokinetic models to populations of interest. However, this is just one possible model out of a family of similar models. One extension worth mentioning is estimating heterogeneity of effects between studies.  Our model assumes that for a given covariate, the effect is the same in different studies; the effect of weight on the clearance rate is the same across studies, for example.  This need not be assumed, and it may be the case that allowing for heterogeneity of effects between study populations may help explain additional variation beyond what measured covariates already explain.  The extension to include heterogeneity of effect is straight forward for our model.  In our Bayes net, we would add an additional plate enclosing the first three plates as well as $\beta$ and the $\mu$, and add nodes for population parameters leading into $\beta$ and $\mu$.  We choose not to implement this extension because our data consists of only two studies, making inference on the between study variability in effects difficult to estimate reliably.
-
-To demonstrate how our model can be used to discover novel predictors of pharmacokientics, we included a simulation study in which we place a double exponential prior on a potentially novel covariate's effect on the bioavalability of the drug.  The double exponential prior acts as a sparsity inducing prior, pulling large effects towards 0 as the LASSO does. Our simulation study showed that our model is able to estimate the effect of this novel covariate reliably, even in circumstances where only a small amount of data on repeatedly sampled patients are available to investigators.  The estimates are biased towards the null due to the sparsity inducing prior. This bias attenuates with more data becoming available, and can also change depending on prior hyperpa⁄rameters. From an estimation perspective, although the estimates of the effects are biased, they may be better suited to predict population effects due to this decrease in variability, similar to the phenomenon displayed by the James-Stein estimator.  We believe that since the goal of exploration is not to get the estimate right the first time, but to rather to discover new avenues for future research, therefore the exchange of variance for bias is not only acceptable but also preferable.
-
-Finally, we applied our model in a case study of apixaban.  We pooled data from two sources; one from a well controlled clinical study, and the other from an observational setting.  We used a sparsity inducing prior to regularize estimates of the effect of concomitant amiodarone on bioavailability of apixaban.  Concomitant amiodarone's effect on apixaban concentration has been previously studied [-@gulilat2020drug], however that model is more descriptive whereas our model is mechanistic (in so far as we model the pharmacokientics explicitly) and incorporates prior information from previous studies.  The findings in our case study and previous work agree; concomitant amiodarone is associated with an increase in apixaban concentrations. It is difficult to evaluate if the magnitudes are similar however, mainly because our model posits a multiplicative effect whereas previous models assume an additive effect.  However, our model is capable of providing richer inferences due to the mechanistic approach and fully Bayesian analysis.  We can propagate uncertainty in the effect of concomitant amiodarone through to other salient pharmacokinetic measures, like max concentration (see figure y).  Additionally, uncertainty in other pharmacokinetic measures can be propagated. For example, where as previous models relied on a point estimate of time to max concentration -- which was the same for each subject -- our model can estimate each patient's time to max concentration (conditioned on covariates) and uncertainty in that estimate propagates through to max concentration.  The posterior distribution of max concentration then captures all uncertainty relevant to the decision, meaning credible intervals should -- at least in theory -- also have better coverage for individuals.  Though a similar Bayesian pharmacokinetic model could be fit using only the sparsely sampled data, pooling information using repeatedly sampled data should be beneficial because of the high precision in estimates of covariate effects afforded by the repeated sampling.
-
-The marginal posterior distributions of the effects display behavior consistent with partially pooled models.  Models fit to each dataset could be considered as a non-pooled estimate, where as our model -- which combines information from multiple datasets -- can be considered as a pooled estimate.  Partially pooled models have the effect of regularizing estimates towards the population mean, but the size of this regularization depends on the precision and magnitude of the estimate. This behavior is most clearly shown in the radon example provided in chapter 12 of Gelman and Hill's book on multilevel modelling[-@gelman2006data]. Those counties with large effects and high precision see little regularization when comparing non-pooled estimates to pooled estimates.  Those counties with large effects and small precision see a strong amount of regularization (see figure 12.1 in  Gelman and Hill [-@gelman2006data]). Similar explanations can be applied to our model.  As an example, we see that the effect of weight on clearance ($Cl$ in our model) has been regularized to be a compromise of the estimates obtained from models fit on the repeatedly and sparsely sampled data separately.  Additionally, we can see that there is little regularization in effects where one dataset provides a high precision estimate (as in creatinine's effect on clearance). The tendency for partially pooled models to regularize towards the population mean has the effect of trading variance for bias, a theme that has permeated this work.  This should in principle result in estimates of the effects with smaller root mean squared error.
-
-Our study is not without limitations.  Firstly, our repeatedly sampled data come from a study concerning patients with Non-Alcoholic Fatty Liver Disease (NAFLD).  Some patients in this study had NAFLD, others did not.  Our sparsely sampled data did not collect this variable, and so technically it should be considered missing.  One strategy is to impute this variable, be it though Frequentist methods or Bayesian methods.  We choose not to impute this and simply exclude it from our model since the study which generated the repeatedly sampled data failed to detect a statistically significant effect of NAFLD on apixaban pharmacokinetics [-@tirona2018apixaban]. Additionally, because patients in the sparsely sampled data were sampled only once, we were forced to assume their time delay was 0.  The time delay is most probably non-zero, and making this assumption may bias estimates of other pharmacokientic measures.  Finally, the subjects in each study are quite different with subjects in the repeatedly sampled data being younger, healthier, and with better kidney function on average. Since subjects in the sparsely sampled data are generally different, a linear effect of covariates on pharmacokientic parameters may not be appropriate due to extrapolation.  A possible remedy for this would be to model the effects of covariates using splines or other suitably flexible methods.  If additional subject matter expertise is available, investigators may choose to model the effects with monotone-splines.  We believe specifications about the functional form of effects are best done with the aid of subject matter experts (pharmacologists, physicians, etc) and opt for the simplest non-trivial functional form for our effects.
-
-
+\newpage
 
 
 # References
